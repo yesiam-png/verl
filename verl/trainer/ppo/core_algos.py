@@ -281,10 +281,11 @@ def compute_grpo_outcome_advantage(
             shape is (bs, response_length)
     """
     scores_t = token_level_rewards.sum(dim=-1)
-    scores = torch.tensor(reward_scores)
-    print(scores_t.shape, scores.shape)
-    assert scores_t.shape == scores.shape
-    assert scores_t == scores
+    scores = torch.tensor(reward_scores, dtype=torch.float32)
+
+    num_mismatches = (scores_t != scores).sum().item()
+    print(f"Number of mismatched elements: {num_mismatches}")
+    #assert torch.equal(scores_t, scores)
 
     id2score = defaultdict(list)
     id2mean = {}

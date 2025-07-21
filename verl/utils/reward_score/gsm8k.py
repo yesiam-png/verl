@@ -57,7 +57,7 @@ def compute_score_org(solution_str, ground_truth, method="strict", format_score=
 
     Args:
         solution_str: the solution text
-        ground_truth: the ground truth
+        ground_truth: the ground trut
         method: the method to extract the solution, choices are 'strict' and 'flexible'
         format_score: the score for the format
         score: the score for the correct answer
@@ -84,8 +84,8 @@ def compute_score(solution_str, ground_truth, method="strict", format_score=0.0,
         format_score: the score for the format
         score: the score for the correct answer
     """
-    text = "#### " + ground_truth
     answer = extract_solution(solution_str=solution_str, method=method)
+
     if answer is None:
         return 0
     else:

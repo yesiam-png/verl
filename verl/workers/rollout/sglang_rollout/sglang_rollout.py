@@ -864,9 +864,9 @@ class SGLangRollout(BaseRollout):
                 # Only continue the conversation if the prompt length is not greater than max_model_len - 1,
                 # since SGLang raises an error when max_new_tokens + 1 is greater to max_model_len (the extra
                 # token accounts for the EOS token).
-                if len(_req.get_generation_prompt_ids(self.processing_class)) + 1 >= self.config.max_model_len:
-                    finish_reason_type = FinishReasonTypeEnum.LENGTH
-                    break
+#                if len(_req.get_generation_prompt_ids(self.processing_class)) + 1 >= self.config.max_model_len:
+#                    finish_reason_type = FinishReasonTypeEnum.LENGTH
+#                    break
 
                 # Video support is not implemented yet
                 image_data = (
@@ -888,61 +888,74 @@ class SGLangRollout(BaseRollout):
                 content = output["text"]
                 finish_reason_type = FinishReasonTypeEnum.from_str(output["meta_info"]["finish_reason"]["type"])
                 current_turns += 1
-                if finish_reason_type == FinishReasonTypeEnum.LENGTH:
-                    _req.add_assistant_message(self.processing_class, content)
-                    break
-                else:
-                    if self._function_call_parser and self._function_call_parser.has_tool_call(content):
-                        finish_reason_type = FinishReasonTypeEnum.TOOL_CALL
-                        _req.state = AsyncRolloutRequestStateEnum.TOOL_CALLING
-                        try:
-                            normed_content, tool_calls = self._function_call_parser.parse_non_stream(content)
-                        except JSONDecodeError:
-                            normed_content = content
-                            tool_calls = []
-                        except AttributeError:
-                            normed_content = content
-                            tool_calls = []
-                        parsed_tool_calls = []
-                        for tool_call in tool_calls:
-                            function, has_decode_error = OpenAIFunctionCallSchema.from_openai_function_parsed_schema(
-                                OpenAIFunctionParsedSchema(
-                                    name=tool_call.name,
-                                    arguments=tool_call.parameters,
-                                )
+                #if finish_reason_type == FinishReasonTypeEnum.LENGTH:
+                #    _req.add_assistant_message(self.processing_class, content)
+                #    break
+                #else:
+                if self._function_call_parser and self._function_call_parser.has_tool_call(content):
+                    finish_reason_type = FinishReasonTypeEnum.TOOL_CALL
+                    _req.state = AsyncRolloutRequestStateEnum.TOOL_CALLING
+                    try:
+                        normed_content, tool_calls = self._function_call_parser.parse_non_stream(content)
+                    except JSONDecodeError:
+                        normed_content = content
+                        tool_calls = []
+                    except AttributeError:
+                        normed_content = content
+                        tool_calls = []
+                    parsed_tool_calls = []
+                    for tool_call in tool_calls:
+                        function, has_decode_error = OpenAIFunctionCallSchema.from_openai_function_parsed_schema(
+                            OpenAIFunctionParsedSchema(
+                                name=tool_call.name,
+                                arguments=tool_call.parameters,
                             )
-                            # Drop the tool call if its arguments has decode error
-                            if has_decode_error:
-                                continue
-                            parsed_tool_calls.append(
-                                OpenAIFunctionToolCall(
-                                    id=str(tool_call.tool_index),
-                                    function=function,
-                                )
-                            )
-                        if len(parsed_tool_calls) > 0:
-                            _req.add_assistant_message(
-                                self.processing_class, normed_content, tool_calls=parsed_tool_calls
-                            )
-                        else:
-                            _req.add_assistant_message(self.processing_class, content)
-                            finish_reason_type = FinishReasonTypeEnum.STOP
-                            _req.state = AsyncRolloutRequestStateEnum.COMPLETED
-                            break
-                    else:
-                        _req.add_assistant_message(
-                            self.processing_class,
-                            content,
                         )
-                        if (
-                            _req.interaction_kwargs
-                            and self.interaction_map
-                            and user_turns < self.config.multi_turn.max_user_turns
-                            and current_turns < self.config.multi_turn.max_assistant_turns
-                        ):
-                            _req.state = AsyncRolloutRequestStateEnum.INTERACTING
-                        else:
-                            break
+                        # Drop the tool call if its arguments has decode error
+                        if has_decode_error:
+                            continue
+                        parsed_tool_calls.append(
+                            OpenAIFunctionToolCall(
+                                id=str(tool_call.tool_index),
+                                function=function,
+                            )
+                        )
+                    if len(parsed_tool_calls) > 0:
+                        _req.add_assistant_message(
+                            self.processing_class, normed_content, tool_calls=parsed_tool_calls
+                        )
+                    else:
+                        _req.add_assistant_message(self.processing_class, content)
+                        finish_reason_type = FinishReasonTypeEnum.STOP
+                        _req.state = AsyncRolloutRequestStateEnum.COMPLETED
+                        break
+                else:
+                    _req.add_assistant_message(
+                        self.processing_class,
+                        content,
+                    )
+                    # newly added by me
+                    messages = [{"role": x.role, "content": x.content} for x in _req.messages]
+                    # Get interaction by name from interaction_kwargs
+                    interaction_name = _req.interaction_kwargs.get(
+                        "name", "gsm8k"
+                    )
+
+                    interaction = self.interaction_map[interaction_name]
+                    should_terminate_sequence, content, reward, metrics = await interaction.generate_response(
+                        _req.request_id, messages, **_req.interaction_kwargs
+                    )
+                    break
+
+                    if (
+                        _req.interaction_kwargs
+                        and self.interaction_map
+                        and user_turns < self.config.multi_turn.max_user_turns
+                        and current_turns < self.config.multi_turn.max_assistant_turns
+                    ):
+                        _req.state = AsyncRolloutRequestStateEnum.INTERACTING
+                    else:
+                        break
             elif _req.state == AsyncRolloutRequestStateEnum.INTERACTING:
                 user_turns += 1
                 messages = [{"role": x.role, "content": x.content} for x in _req.messages]
@@ -989,7 +1002,7 @@ class SGLangRollout(BaseRollout):
             tool_reward_tasks.append(calc_reward_and_release_fn(name, tool))
         tool_reward_scores = await asyncio.gather(*tool_reward_tasks)
         tool_reward_scores = dict(tool_reward_scores)
-        all_rewards = {**tool_reward_scores, **{"user_turn_rewards": user_turn_rewards}}
+        all_rewards = {**tool_reward_scores, **{"user_turn_rewards": reward}}
         _req.finalize(self.processing_class, all_rewards, finish_reason_type)
 
         return _req
@@ -1126,7 +1139,7 @@ class SGLangRollout(BaseRollout):
             prompt_loss_mask.append(req.prompt_loss_mask.to(tgt_device).squeeze(0))
             response_loss_mask.append(req.response_loss_mask.to(tgt_device).squeeze(0))
             messages.append({"messages": req.messages})
-            reward_scores.append(req.reward_scores)
+            reward_scores.append(req.reward_scores["user_turn_rewards"])
             multi_modal_inputs.append(req.multi_modal_inputs)
 
         prompt_ids = pad_sequence(
