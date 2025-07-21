@@ -244,6 +244,7 @@ def compute_gae_advantage_return(
 # NOTE(sgm): this implementation only consider outcome supervision, where the reward is a scalar.
 @register_adv_est(AdvantageEstimator.GRPO)  # or simply: @register_adv_est("grpo")
 def compute_grpo_outcome_advantage(
+    reward_scores: torch.Tensor,
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
     index: np.ndarray,
@@ -279,7 +280,11 @@ def compute_grpo_outcome_advantage(
         Returns: `(torch.Tensor)`
             shape is (bs, response_length)
     """
-    scores = token_level_rewards.sum(dim=-1)
+    scores_t = token_level_rewards.sum(dim=-1)
+    scores = torch.tensor(reward_scores)
+    print(scores_t.shape, scores.shape)
+    assert scores_t.shape == scores.shape
+    assert scores_t == scores
 
     id2score = defaultdict(list)
     id2mean = {}

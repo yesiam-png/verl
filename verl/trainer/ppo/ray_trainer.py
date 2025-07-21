@@ -264,6 +264,7 @@ def compute_advantage(
         grpo_calculation_mask = data.batch["response_mask"]
         # Call compute_grpo_outcome_advantage with parameters matching its definition
         advantages, returns = core_algos.compute_grpo_outcome_advantage(
+            reward_scores=data.non_tensor_batch["reward_scores"]["user_turn_rewards"],
             token_level_rewards=data.batch["token_level_rewards"],
             response_mask=grpo_calculation_mask,
             index=data.non_tensor_batch["uid"],
@@ -1208,7 +1209,7 @@ class RayPPOTrainer:
 
                     # compute global_valid tokens
                     batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
-
+                    #"""
                     with marked_timer("reward", timing_raw, color="yellow"):
                         # compute reward model score
                         if self.use_rm:
@@ -1219,7 +1220,7 @@ class RayPPOTrainer:
                             future_reward = compute_reward_async.remote(data=batch, reward_fn=self.reward_fn)
                         else:
                             reward_tensor, reward_extra_infos_dict = compute_reward(batch, self.reward_fn)
-
+                    #"""
                     # recompute old_log_probs
                     with marked_timer("old_log_prob", timing_raw, color="blue"):
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
@@ -1272,6 +1273,7 @@ class RayPPOTrainer:
                             batch = batch.union(values)
 
                     with marked_timer("adv", timing_raw, color="brown"):
+                        #"""
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
                         if self.config.reward_model.launch_reward_fn_async:
@@ -1289,6 +1291,7 @@ class RayPPOTrainer:
                             metrics.update(kl_metrics)
                         else:
                             batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
+                        #"""
 
                         # compute advantages, executed on the driver process
 
@@ -1333,7 +1336,7 @@ class RayPPOTrainer:
                                 inputs=inputs,
                                 outputs=outputs,
                                 scores=scores,
-                                reward_extra_infos_dict=reward_extra_infos_dict,
+                                reward_extra_infos_dict=reward_extra_infos_dict, # {}
                                 dump_path=rollout_data_dir,
                             )
 
