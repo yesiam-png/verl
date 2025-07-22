@@ -362,7 +362,8 @@ class DataParallelPPOActor(BasePPOActor):
             "attention_mask",
             "position_ids",
             "old_log_probs",
-            "advantages",
+            "response_attention_mask",
+         #   "advantages",
         ]
         if self.config.use_kl_loss:
             select_keys.append("ref_log_prob")
@@ -395,7 +396,8 @@ class DataParallelPPOActor(BasePPOActor):
                     model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
                     response_mask = model_inputs["response_mask"]
                     old_log_prob = model_inputs["old_log_probs"]
-                    advantages = model_inputs["advantages"]
+                    response_attention_mask = model_inputs["response_attention_mask"]
+                   # advantages = model_inputs["advantages"]
 
                     clip_ratio = self.config.clip_ratio
                     clip_ratio_low = (
@@ -415,7 +417,9 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                     )
-
+                    print("zsazsa", log_prob.size(), response_mask.size(), response_attention_mask.size(), response_mask)
+                    print("syl", response_attention_mask)
+                    advantages = torch.sum(log_prob * response_attention_mask * (~response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
                     if self.config.policy_loss.loss_mode == "vanilla":

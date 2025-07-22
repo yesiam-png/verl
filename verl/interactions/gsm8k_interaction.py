@@ -68,12 +68,13 @@ class Gsm8kInteraction(BaseInteraction):
 
         reward = await self.calculate_score(instance_id)
         if reward == 1.0:
-            response = "Your response is correct!"
+           # response = "Your response is correct!"
             should_terminate_sequence = True
         else:
-            response = "Your response is incorrect! You need to reflect on your answer and try again."
+           # response = "Your response is incorrect! You need to reflect on your answer and try again."
             should_terminate_sequence = False
-
+        response = "#### " + self._instance_dict[instance_id]["ground_truth"]
+        should_terminate_sequence = True
         return should_terminate_sequence, response, reward, {}
 
     async def calculate_score(self, instance_id: str, **kwargs) -> float:

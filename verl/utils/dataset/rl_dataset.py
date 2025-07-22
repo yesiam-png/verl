@@ -162,9 +162,13 @@ class RLHFDataset(Dataset):
                     return len(processor(text=[raw_prompt], images=images, videos=videos)["input_ids"][0])
 
             else:
-
                 def doc2len(doc) -> int:
-                    return len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
+                    try:
+                        return len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
+                    except Exception as e:
+                        return len(doc[prompt_key])
+           #     def doc2len(doc) -> int:
+           #         return len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
 
             dataframe = dataframe.filter(
                 lambda doc: doc2len(doc) <= self.max_prompt_length,
@@ -258,7 +262,12 @@ class RLHFDataset(Dataset):
                 row_dict["multi_modal_inputs"].pop("second_per_grid_ts", None)
 
         else:
-            raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            try:
+                raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            except Exception as e:
+                raw_prompt = messages
+
+           # raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
             model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=False)
             input_ids = model_inputs.pop("input_ids")
             attention_mask = model_inputs.pop("attention_mask")

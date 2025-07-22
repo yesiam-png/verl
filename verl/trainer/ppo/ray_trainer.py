@@ -265,7 +265,7 @@ def compute_advantage(
         # Call compute_grpo_outcome_advantage with parameters matching its definition
         advantages, returns = core_algos.compute_grpo_outcome_advantage(
             reward_scores=data.non_tensor_batch["reward_scores"],
-            token_level_rewards=data.batch["token_level_rewards"],
+        #    token_level_rewards=data.batch["token_level_rewards"],
             response_mask=grpo_calculation_mask,
             index=data.non_tensor_batch["uid"],
             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
@@ -1292,7 +1292,8 @@ class RayPPOTrainer:
                         else:
                             batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
                         #"""
-
+                        
+                        """
                         # compute advantages, executed on the driver process
 
                         norm_adv_by_std_in_grpo = self.config.algorithm.get(
@@ -1308,6 +1309,7 @@ class RayPPOTrainer:
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                             config=self.config.algorithm,
                         )
+                        """
 
                     # update critic
                     if self.use_critic:

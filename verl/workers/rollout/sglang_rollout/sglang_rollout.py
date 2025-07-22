@@ -934,6 +934,7 @@ class SGLangRollout(BaseRollout):
                         self.processing_class,
                         content,
                     )
+                    """
                     # newly added by me
                     messages = [{"role": x.role, "content": x.content} for x in _req.messages]
                     # Get interaction by name from interaction_kwargs
@@ -944,14 +945,14 @@ class SGLangRollout(BaseRollout):
                     interaction = self.interaction_map[interaction_name]
                     should_terminate_sequence, content, reward, metrics = await interaction.generate_response(
                         _req.request_id, messages, **_req.interaction_kwargs
-                    )
+                    )  # we need reward in all_rewards
                     break
-
+                    """
                     if (
                         _req.interaction_kwargs
                         and self.interaction_map
-                        and user_turns < self.config.multi_turn.max_user_turns
-                        and current_turns < self.config.multi_turn.max_assistant_turns
+                    #    and user_turns < self.config.multi_turn.max_user_turns
+                    #    and current_turns < self.config.multi_turn.max_assistant_turns
                     ):
                         _req.state = AsyncRolloutRequestStateEnum.INTERACTING
                     else:
@@ -975,12 +976,13 @@ class SGLangRollout(BaseRollout):
                     _req.request_id, messages, **_req.interaction_kwargs
                 )
                 user_turn_rewards.append(reward)
+                _req.add_user_message(self.processing_class, content)
                 if should_terminate_sequence:
                     finish_reason_type = FinishReasonTypeEnum.STOP
                     _req.state = AsyncRolloutRequestStateEnum.COMPLETED
                     break
                 else:
-                    _req.add_user_message(self.processing_class, content)
+                    #_req.add_user_message(self.processing_class, content)
                     if len(_req.input_ids) >= self.config.max_model_len:
                         finish_reason_type = FinishReasonTypeEnum.STOP
                         break
@@ -1219,6 +1221,7 @@ class SGLangRollout(BaseRollout):
                 "input_ids": input_ids,  # here input_ids become the whole sentences
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
+                "response_attention_mask": response_attention_mask,
             },
             batch_size=len(sorted_output_req_list),
         )

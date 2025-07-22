@@ -245,7 +245,7 @@ def compute_gae_advantage_return(
 @register_adv_est(AdvantageEstimator.GRPO)  # or simply: @register_adv_est("grpo")
 def compute_grpo_outcome_advantage(
     reward_scores: torch.Tensor,
-    token_level_rewards: torch.Tensor,
+  #  token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
     index: np.ndarray,
     epsilon: float = 1e-6,
@@ -280,12 +280,12 @@ def compute_grpo_outcome_advantage(
         Returns: `(torch.Tensor)`
             shape is (bs, response_length)
     """
-    scores_t = token_level_rewards.sum(dim=-1)
+  #  scores_t = token_level_rewards.sum(dim=-1)
     scores = torch.tensor(reward_scores, dtype=torch.float32)
-
-    num_mismatches = (scores_t != scores).sum().item()
-    print(f"Number of mismatched elements: {num_mismatches}")
-    #assert torch.equal(scores_t, scores)
+    
+  #  num_mismatches = (scores_t != scores).sum().item()
+  #  print(f"Number of mismatched elements: {num_mismatches}")
+  #  #assert torch.equal(scores_t, scores)
 
     id2score = defaultdict(list)
     id2mean = {}
