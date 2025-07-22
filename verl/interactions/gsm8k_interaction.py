@@ -77,6 +77,7 @@ class Gsm8kInteraction(BaseInteraction):
         """
         response = "#### " + self._instance_dict[instance_id]["ground_truth"]
         should_terminate_sequence = True
+        reward = 1.0
         return should_terminate_sequence, response, reward, {}
 
     async def calculate_score(self, instance_id: str, **kwargs) -> float:

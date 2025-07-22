@@ -419,9 +419,14 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                     )
-                    reward_scores = torch.mean(log_prob * response_attention_mask * (torch.ones_like(response_mask) - response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
-                    print("reward_scoresreward_scores", reward_scores)
-                    print("log_problog_prob", log_prob, response_attention_mask * (torch.ones_like(response_mask) - response_mask))
+                    with torch.no_grad():
+                        reward_scores = torch.mean(log_prob * response_attention_mask * (torch.ones_like(response_mask) - response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
+                 #   print("reward_scoresreward_scores", reward_scores)
+                 #   print("(torch.ones_like(response_mask) - response_mask)", (response_mask))
+                 #   print("response_attention_mask", response_attention_mask)
+                 #   print("log_problog_prob", log_prob)
+                 #   print("sssssum", torch.sum(response_attention_mask * (torch.ones_like(response_mask) - response_mask), dim=-1))
+                 #   print("final", response_attention_mask * (torch.ones_like(response_mask) - response_mask))
                     advantages, returns = core_algos.compute_grpo_outcome_advantage(
                         reward_scores=reward_scores,
                         response_mask=response_mask,

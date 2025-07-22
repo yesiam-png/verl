@@ -115,8 +115,8 @@ class AsyncRolloutRequest(BaseModel):
     use_inference_chat_template: bool
     tokenization_sanity_check_mode: TokenizationSanityCheckModeEnum
     generation_prompt_ids: Optional[torch.Tensor] = None
-    base_conv_wo_gen_prompt_end_pos: int
-    base_conv_with_gen_prompt_end_pos: int
+    base_conv_wo_gen_prompt_end_pos: Optional[int] = None #int
+    base_conv_with_gen_prompt_end_pos: Optional[int] = None #int
 
     @model_validator(mode="before")
     @classmethod
@@ -148,6 +148,7 @@ class AsyncRolloutRequest(BaseModel):
         )
 
         multi_modal_data = values["multi_modal_data"]
+        """
         tokens_without_prompt = cls._handle_apply_chat_template(
             processing_class,
             messages,
@@ -156,6 +157,7 @@ class AsyncRolloutRequest(BaseModel):
             add_generation_prompt=False,
             tokenize=True,
         )
+        """
         if (
             values.get("input_ids") is None
             or values.get("attention_mask") is None
@@ -195,7 +197,8 @@ class AsyncRolloutRequest(BaseModel):
 
         values["prompt_ids"], values["prompt_attention_mask"] = values["input_ids"], values["attention_mask"]
         values["loss_mask"] = values["prompt_loss_mask"] = torch.zeros_like(values["input_ids"], dtype=torch.bool)
-        values["generation_prompt_ids"] = values["input_ids"][..., tokens_without_prompt.shape[-1] :]
+    #    values["generation_prompt_ids"] = values["input_ids"][..., tokens_without_prompt.shape[-1] :]
+        """
         values["base_conv_wo_gen_prompt_end_pos"] = cls._handle_apply_chat_template(
             processing_class,
             BASE_CHAT_HISTORY,
@@ -213,7 +216,7 @@ class AsyncRolloutRequest(BaseModel):
             add_generation_prompt=True,
             tokenize=True,
         ).shape[-1]
-
+        """
         return values
 
     @staticmethod
@@ -345,10 +348,6 @@ class AsyncRolloutRequest(BaseModel):
         self, processing_class: PreTrainedTokenizer | PreTrainedTokenizerFast | ProcessorMixin
     ) -> list[int]:
         """
-        Get the generation prompt ids for rollout engine.
-
-        Because rollout engine(SGLang) requires the ids to be a list, we need to convert the tensor to a list.
-        """
         generation_prompt_ids = (
             None
             if self.input_ids[..., -self.generation_prompt_ids.shape[-1] :].eq(self.generation_prompt_ids).all()
@@ -356,7 +355,8 @@ class AsyncRolloutRequest(BaseModel):
         )
         if generation_prompt_ids is not None:
             self._update_input_ids(processing_class, generation_prompt_ids, attention_mask=True, loss_mask=False)
-
+        """
+        assert self.use_inference_chat_template == False
         if self.use_inference_chat_template:
             messages = [msg.model_dump() for msg in self.messages]
             tools = [tool.model_dump() for tool in self.tool_schemas] if self.tool_schemas else None
@@ -391,10 +391,10 @@ class AsyncRolloutRequest(BaseModel):
         content_ids = processing_class(text=[content], return_tensors="pt")
         content_ids = dict(content_ids)["input_ids"]
 
-        decoded_content = processing_class.batch_decode(self.input_ids, skip_special_tokens=False)
+       # decoded_content = processing_class.batch_decode(self.input_ids, skip_special_tokens=False)
        # print("decoded_old", decoded_content, "oldendiofdecoded_content")
-        decoded_content_ids = processing_class.batch_decode(content_ids, skip_special_tokens=False)
-      #  print("decoded_new", decoded_content_ids, "newendiofdecoded_content")
+       # decoded_content_ids = processing_class.batch_decode(content_ids, skip_special_tokens=False)
+       # print("decoded_new", decoded_content_ids, "newendiofdecoded_content")
 
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=False)
 
@@ -416,7 +416,7 @@ class AsyncRolloutRequest(BaseModel):
             processing_class, messages, multi_modal_data={}, tools=tools, add_generation_prompt=False, tokenize=True
         )[..., self.base_conv_with_gen_prompt_end_pos :]
         """
-        content_ids = processing_class(text=[content], return_tensors="pt")
+        content_ids = processing_class(text=[content + "\n"], return_tensors="pt")
         content_ids = dict(content_ids)["input_ids"]
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=True)
 
@@ -496,14 +496,14 @@ class AsyncRolloutRequest(BaseModel):
 
         # In case we failed to generate the assistant message and the generation prompt ids were already added to
         # input_ids, remove them from the end of input_ids
-        if self.input_ids[..., -self.generation_prompt_ids.shape[-1] :].eq(self.generation_prompt_ids).all():
-            self.input_ids = self.input_ids[..., : -self.generation_prompt_ids.shape[-1]]
-            self.attention_mask = self.attention_mask[..., : -self.generation_prompt_ids.shape[-1]]
-            self.position_ids = self.position_ids[..., : -self.generation_prompt_ids.shape[-1]]
-            self.loss_mask = self.loss_mask[..., : -self.generation_prompt_ids.shape[-1]]
+     #   if self.input_ids[..., -self.generation_prompt_ids.shape[-1] :].eq(self.generation_prompt_ids).all():
+     #       self.input_ids = self.input_ids[..., : -self.generation_prompt_ids.shape[-1]]
+     #       self.attention_mask = self.attention_mask[..., : -self.generation_prompt_ids.shape[-1]]
+     #       self.position_ids = self.position_ids[..., : -self.generation_prompt_ids.shape[-1]]
+     #       self.loss_mask = self.loss_mask[..., : -self.generation_prompt_ids.shape[-1]]
 
         self.response_ids = self.input_ids[..., self.prompt_ids.shape[-1] :]
-
+        """
         if self.tokenization_sanity_check_mode != TokenizationSanityCheckModeEnum.DISABLE and False:
             # When there is a diff, we log the diffs with diff_surrounding_chars context
             diff_surrounding_chars = 10
@@ -579,7 +579,7 @@ class AsyncRolloutRequest(BaseModel):
                         )
                     diff_details = "\n".join(diff_details_list)
                     logger.warning(f"Found differences:\n{diff_details}")
-
+        """
         if finish_reason_type == FinishReasonTypeEnum.STOP:
             pass
         elif finish_reason_type == FinishReasonTypeEnum.LENGTH:
@@ -595,7 +595,7 @@ class AsyncRolloutRequest(BaseModel):
             == self.loss_mask.shape[-1]
         ), f"""Request {self.request_id} has different length of {self.input_ids.shape[-1]=}, 
             {self.attention_mask.shape[-1]=}, {self.position_ids.shape[-1]=}, {self.loss_mask.shape[-1]=}"""
-
+        
     def truncate_output_ids(
         self, processing_class: PreTrainedTokenizer | PreTrainedTokenizerFast | ProcessorMixin
     ) -> None:

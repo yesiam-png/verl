@@ -281,7 +281,7 @@ def compute_grpo_outcome_advantage(
             shape is (bs, response_length)
     """
   #  scores_t = token_level_rewards.sum(dim=-1)
-    scores = torch.tensor(reward_scores, dtype=torch.float32)
+ #   scores = torch.tensor(reward_scores, dtype=torch.float32)
     
   #  num_mismatches = (scores_t != scores).sum().item()
   #  print(f"Number of mismatched elements: {num_mismatches}")
@@ -292,9 +292,9 @@ def compute_grpo_outcome_advantage(
     id2std = {}
 
     with torch.no_grad():
-        bsz = scores.shape[0]
+        bsz = reward_scores.shape[0]
         for i in range(bsz):
-            id2score[index[i]].append(scores[i])
+            id2score[index[i]].append(reward_scores[i])
         for idx in id2score:
             if len(id2score[idx]) == 1:
                 id2mean[idx] = torch.tensor(0.0)
@@ -306,12 +306,12 @@ def compute_grpo_outcome_advantage(
                 raise ValueError(f"no score in prompt index: {idx}")
         for i in range(bsz):
             if norm_adv_by_std_in_grpo:
-                scores[i] = (scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
+                reward_scores[i] = (reward_scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
             else:
-                scores[i] = scores[i] - id2mean[index[i]]
-        scores = scores.unsqueeze(-1) * response_mask
+                reward_scores[i] = reward_scores[i] - id2mean[index[i]]
+        reward_scores = reward_scores.unsqueeze(-1) * response_mask
 
-    return scores, scores
+    return reward_scores, reward_scores
 
 
 @register_adv_est(AdvantageEstimator.GRPO_PASSK)  # or simply: @register_adv_est("grpo_passk")
