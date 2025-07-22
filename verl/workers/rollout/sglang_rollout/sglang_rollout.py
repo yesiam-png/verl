@@ -1272,13 +1272,12 @@ class SGLangRollout(BaseRollout):
                 _interaction_kwargs = prompts.non_tensor_batch["interaction_kwargs"][data_idx]
             else:
                 _interaction_kwargs = {}
-
             req = AsyncRolloutRequest(
                 batch_data_id=data_idx,
                 rollout_offset=0,
                 request_id=str(uuid4()),
                 state=AsyncRolloutRequestStateEnum.PENDING,
-                messages=raw_prompt.tolist(),
+                messages=raw_prompt,#.tolist(),
                 multi_modal_data=multi_modal_data,
                 tool_schemas=_tool_schemas,
                 tools_kwargs=_tools_kwargs,

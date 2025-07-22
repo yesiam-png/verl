@@ -53,8 +53,9 @@ class Gsm8kInteraction(BaseInteraction):
         return instance_id
 
     async def generate_response(
-        self, instance_id: str, messages: list[dict[str, Any]], **kwargs
+        self, instance_id: str, messages, **kwargs
     ) -> tuple[bool, str, float, dict]:
+        """
         content = ""
         for i in range(len(messages) - 1, -1, -1):
             item = messages[i]
@@ -65,7 +66,7 @@ class Gsm8kInteraction(BaseInteraction):
             self._instance_dict[instance_id]["response"] = content
         else:
             self._instance_dict[instance_id]["response"] = "#### " + (content or "")
-
+        
         reward = await self.calculate_score(instance_id)
         if reward == 1.0:
            # response = "Your response is correct!"
@@ -73,6 +74,7 @@ class Gsm8kInteraction(BaseInteraction):
         else:
            # response = "Your response is incorrect! You need to reflect on your answer and try again."
             should_terminate_sequence = False
+        """
         response = "#### " + self._instance_dict[instance_id]["ground_truth"]
         should_terminate_sequence = True
         return should_terminate_sequence, response, reward, {}

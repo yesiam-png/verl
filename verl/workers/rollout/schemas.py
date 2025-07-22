@@ -87,7 +87,7 @@ class AsyncRolloutRequest(BaseModel):
     rollout_offset: int = 0
     request_id: str
     state: AsyncRolloutRequestStateEnum
-    messages: list[Message]
+    messages: str #list[Message]
     multi_modal_keys: Optional[list[str]] = None
     multi_modal_data: Optional[dict[str, Any]] = None
     multi_modal_inputs: Optional[dict[str, torch.Tensor]] = None
@@ -128,7 +128,7 @@ class AsyncRolloutRequest(BaseModel):
         if not (processing_class := values.pop("processing_class", None)):
             raise ValueError("processing_class is required for AsyncRolloutRequest initialization")
 
-        values["messages"] = [Message.model_validate(msg) for msg in messages]
+        values["messages"] = messages # [Message.model_validate(msg) for msg in messages]
 
         # If there is no multi_modal_keys, we assume the multi-modal data is image and video.
         if not values.get("multi_modal_keys"):
@@ -219,16 +219,17 @@ class AsyncRolloutRequest(BaseModel):
     @staticmethod
     def _handle_apply_chat_template(
         processing_class: PreTrainedTokenizer | PreTrainedTokenizerFast | ProcessorMixin,
-        messages: list[Message],
+        messages: str,#list[Message],
         multi_modal_data: dict[str, Any],
         tools: Optional[list[OpenAIFunctionToolSchema]] = None,
         add_generation_prompt: bool = False,
         tokenize: bool = False,
         return_dict: bool = False,
     ):
-        raw_prompt = processing_class.apply_chat_template(
-            messages, tools=tools, add_generation_prompt=add_generation_prompt, tokenize=False
-        )
+        #raw_prompt = processing_class.apply_chat_template(
+        #    messages, tools=tools, add_generation_prompt=add_generation_prompt, tokenize=False
+        #)
+        raw_prompt = messages
         if not tokenize:
             return raw_prompt
 
@@ -403,6 +404,7 @@ class AsyncRolloutRequest(BaseModel):
         content: str,
         tool_calls: Optional[list[OpenAIFunctionToolCall]] = None,
     ) -> None:
+        """
         self.messages.append(Message(role="assistant", content=content, tool_calls=tool_calls))
 
         messages = [*BASE_CHAT_HISTORY, self.messages[-1]]
@@ -413,84 +415,10 @@ class AsyncRolloutRequest(BaseModel):
         content_ids = self._handle_apply_chat_template(
             processing_class, messages, multi_modal_data={}, tools=tools, add_generation_prompt=False, tokenize=True
         )[..., self.base_conv_with_gen_prompt_end_pos :]
+        """
+        content_ids = processing_class(text=[content], return_tensors="pt")
+        content_ids = dict(content_ids)["input_ids"]
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=True)
-
-    def add_tool_response_messages(
-        self,
-        processing_class: PreTrainedTokenizer | PreTrainedTokenizerFast | ProcessorMixin,
-        contents: list[str | dict[str, Any]],
-    ) -> None:
-        if not contents:
-            return
-        # We also handle the case when tool returns image
-        # We require the processing of the image and video to be done at tool.execute() level
-        delta_multi_modal_data = {key: [] for key in self.multi_modal_keys}
-        for content in contents:
-            if isinstance(content, dict):
-                content_list = []
-                # When we update multi_model_keys, we also need to update this logic
-                if "image" in content:
-                    if not isinstance(content["image"], list):
-                        raise ValueError(
-                            f"Image must be a list, but got {type(content['image'])}. Please check the tool.execute(). "
-                            f"For single images, wrap in a list: [image]. "
-                            f"Example: {{'image': [img1]}} or {{'image': [img1, img2, ...]}}."
-                        )
-
-                    content_list.extend([{"type": "image"} for _ in content["image"]])
-                    delta_multi_modal_data["image"].extend(content["image"])
-                if "video" in content:
-                    if not isinstance(content["video"], list):
-                        raise ValueError(
-                            f"Video must be a list, but got {type(content['video'])}. Please check the tool.execute(). "
-                            f"For single videos, wrap in a list: [video]. "
-                            f"Example: {{'video': [video1]}} or {{'video': [video1, video2, ...]}}."
-                        )
-
-                    content_list.extend([{"type": "video"} for _ in content["video"]])
-                    delta_multi_modal_data["video"].extend(content["video"])
-                if "text" in content:
-                    content_list.append({"type": "text", "text": content["text"]})
-                for key in content:
-                    if key not in ["image", "video", "text"]:
-                        logger.warning(
-                            f"Tool response message contains unexpected key: {key} "
-                            f"while we only support `image`, `video`, and `text`."
-                        )
-                self.messages.append(Message(role="tool", content=content_list))
-            else:
-                self.messages.append(Message(role="tool", content=content))
-
-        messages = [*BASE_CHAT_HISTORY, *self.messages[-len(contents) :]]
-        tools = [tool.model_dump() for tool in self.tool_schemas] if self.tool_schemas else None
-
-        for key in self.multi_modal_keys:
-            if len(delta_multi_modal_data[key]) > 0:
-                self.multi_modal_data[key].extend(delta_multi_modal_data[key])
-
-        # We just passed the new multi-modal data to the chat template to update the input_ids.
-        content_info = self._handle_apply_chat_template(
-            processing_class,
-            messages,
-            multi_modal_data=delta_multi_modal_data,
-            tools=tools,
-            add_generation_prompt=False,
-            tokenize=True,
-            return_dict=True,
-        )
-        content_ids = content_info["input_ids"][..., self.base_conv_wo_gen_prompt_end_pos :]
-
-        # process multi_modal_inputs
-        multi_modal_inputs = content_info.copy()
-        multi_modal_inputs.pop("input_ids", None)
-        multi_modal_inputs.pop("attention_mask", None)
-        self._update_input_ids(
-            processing_class,
-            content_ids,
-            attention_mask=True,
-            loss_mask=False,
-            new_multi_modal_inputs=multi_modal_inputs,
-        )
 
     def update_metrics(self, metrics: Any, tool_id: str) -> None:
         """
@@ -576,7 +504,7 @@ class AsyncRolloutRequest(BaseModel):
 
         self.response_ids = self.input_ids[..., self.prompt_ids.shape[-1] :]
 
-        if self.tokenization_sanity_check_mode != TokenizationSanityCheckModeEnum.DISABLE:
+        if self.tokenization_sanity_check_mode != TokenizationSanityCheckModeEnum.DISABLE and False:
             # When there is a diff, we log the diffs with diff_surrounding_chars context
             diff_surrounding_chars = 10
 
