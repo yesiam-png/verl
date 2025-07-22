@@ -419,9 +419,9 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                     )
-                    print("zsazsa", torch.sum(response_mask, dim=-1) - torch.sum(response_attention_mask, dim=-1))
-                    reward_scores = torch.sum(log_prob * response_attention_mask * (~response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
-
+                    reward_scores = torch.mean(log_prob * response_attention_mask * (torch.ones_like(response_mask) - response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
+                    print("reward_scoresreward_scores", reward_scores)
+                    print("log_problog_prob", log_prob, response_attention_mask * (torch.ones_like(response_mask) - response_mask))
                     advantages, returns = core_algos.compute_grpo_outcome_advantage(
                         reward_scores=reward_scores,
                         response_mask=response_mask,

@@ -835,7 +835,6 @@ class SGLangRollout(BaseRollout):
         request_sampling_params.update(kwargs)
 
         while current_turns < self.config.multi_turn.max_assistant_turns:
-            print("_req.state", _req.state, current_turns)
             if _req.state == AsyncRolloutRequestStateEnum.PENDING:
                 await self._handle_pending_state(_req)
                 _req.state = AsyncRolloutRequestStateEnum.RUNNING
@@ -949,16 +948,17 @@ class SGLangRollout(BaseRollout):
                     )  # we need reward in all_rewards
                     break
                     """
-                    print("_req.interaction_kwargs", _req.interaction_kwargs, self.interaction_map)
-               #     if (
-               #         _req.interaction_kwargs
-               #         and self.interaction_map
+
+                    assert _req.interaction_kwargs and self.interaction_map
+                    if (
+                        _req.interaction_kwargs
+                        and self.interaction_map
                     #    and user_turns < self.config.multi_turn.max_user_turns
                     #    and current_turns < self.config.multi_turn.max_assistant_turns
-               #     ):
-                    _req.state = AsyncRolloutRequestStateEnum.INTERACTING
-               #     else:
-               #         break
+                    ):
+                        _req.state = AsyncRolloutRequestStateEnum.INTERACTING
+                    else:
+                        break
             elif _req.state == AsyncRolloutRequestStateEnum.INTERACTING:
                 user_turns += 1
                 messages = [{"role": x.role, "content": x.content} for x in _req.messages]

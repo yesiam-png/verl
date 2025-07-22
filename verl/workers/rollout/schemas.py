@@ -376,6 +376,7 @@ class AsyncRolloutRequest(BaseModel):
         processing_class: PreTrainedTokenizer | PreTrainedTokenizerFast | ProcessorMixin,
         content: str,
     ) -> None:
+        """
         self.messages.append(Message(role="user", content=content))
         messages = [*BASE_CHAT_HISTORY, self.messages[-1]]
         tools = [tool.model_dump() for tool in self.tool_schemas] if self.tool_schemas else None
@@ -385,6 +386,15 @@ class AsyncRolloutRequest(BaseModel):
         content_ids = self._handle_apply_chat_template(
             processing_class, messages, multi_modal_data={}, tools=tools, add_generation_prompt=False, tokenize=True
         )[..., self.base_conv_wo_gen_prompt_end_pos :]
+        """
+        content_ids = processing_class(text=[content], return_tensors="pt")
+        content_ids = dict(content_ids)["input_ids"]
+
+        decoded_content = processing_class.batch_decode(self.input_ids, skip_special_tokens=False)
+       # print("decoded_old", decoded_content, "oldendiofdecoded_content")
+        decoded_content_ids = processing_class.batch_decode(content_ids, skip_special_tokens=False)
+      #  print("decoded_new", decoded_content_ids, "newendiofdecoded_content")
+
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=False)
 
     def add_assistant_message(
