@@ -835,6 +835,7 @@ class SGLangRollout(BaseRollout):
         request_sampling_params.update(kwargs)
 
         while current_turns < self.config.multi_turn.max_assistant_turns:
+            print("_req.state", _req.state, current_turns)
             if _req.state == AsyncRolloutRequestStateEnum.PENDING:
                 await self._handle_pending_state(_req)
                 _req.state = AsyncRolloutRequestStateEnum.RUNNING
@@ -948,15 +949,16 @@ class SGLangRollout(BaseRollout):
                     )  # we need reward in all_rewards
                     break
                     """
-                    if (
-                        _req.interaction_kwargs
-                        and self.interaction_map
+                    print("_req.interaction_kwargs", _req.interaction_kwargs, self.interaction_map)
+               #     if (
+               #         _req.interaction_kwargs
+               #         and self.interaction_map
                     #    and user_turns < self.config.multi_turn.max_user_turns
                     #    and current_turns < self.config.multi_turn.max_assistant_turns
-                    ):
-                        _req.state = AsyncRolloutRequestStateEnum.INTERACTING
-                    else:
-                        break
+               #     ):
+                    _req.state = AsyncRolloutRequestStateEnum.INTERACTING
+               #     else:
+               #         break
             elif _req.state == AsyncRolloutRequestStateEnum.INTERACTING:
                 user_turns += 1
                 messages = [{"role": x.role, "content": x.content} for x in _req.messages]
@@ -1004,7 +1006,7 @@ class SGLangRollout(BaseRollout):
             tool_reward_tasks.append(calc_reward_and_release_fn(name, tool))
         tool_reward_scores = await asyncio.gather(*tool_reward_tasks)
         tool_reward_scores = dict(tool_reward_scores)
-        all_rewards = {**tool_reward_scores, **{"user_turn_rewards": reward}}
+        all_rewards = {**tool_reward_scores, **{"user_turn_rewards": user_turn_rewards}}
         _req.finalize(self.processing_class, all_rewards, finish_reason_type)
 
         return _req

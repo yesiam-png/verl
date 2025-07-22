@@ -42,7 +42,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.project_name='gsm8k_async_rl' \
     trainer.experiment_name='qwen2.5-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards' \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=2 \
+    trainer.nnodes=1 \
     trainer.save_freq=-1 \
     trainer.test_freq=20 \
     trainer.total_epochs=15 \

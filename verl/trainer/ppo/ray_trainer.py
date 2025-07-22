@@ -264,7 +264,7 @@ def compute_advantage(
         grpo_calculation_mask = data.batch["response_mask"]
         # Call compute_grpo_outcome_advantage with parameters matching its definition
         advantages, returns = core_algos.compute_grpo_outcome_advantage(
-            reward_scores=data.non_tensor_batch["reward_scores"],
+            reward_scores=data.batch["token_level_rewards"],#data.non_tensor_batch["reward_scores"],
         #    token_level_rewards=data.batch["token_level_rewards"],
             response_mask=grpo_calculation_mask,
             index=data.non_tensor_batch["uid"],

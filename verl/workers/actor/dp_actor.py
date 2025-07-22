@@ -26,6 +26,7 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 import verl.utils.torch_functional as verl_F
 from verl import DataProto
+from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.core_algos import agg_loss, compute_policy_loss, get_policy_loss_fn, kl_penalty
 from verl.utils.device import get_device_name, is_cuda_available, is_npu_available
 from verl.utils.fsdp_utils import FSDPModule, fsdp2_clip_grad_norm_
@@ -369,7 +370,7 @@ class DataParallelPPOActor(BasePPOActor):
             select_keys.append("ref_log_prob")
 
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
-        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
+        non_tensor_select_keys = ["multi_modal_inputs", "uid"] if has_multi_modal_inputs else ["uid"]
 
         data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
 
@@ -397,6 +398,7 @@ class DataParallelPPOActor(BasePPOActor):
                     response_mask = model_inputs["response_mask"]
                     old_log_prob = model_inputs["old_log_probs"]
                     response_attention_mask = model_inputs["response_attention_mask"]
+                    uid = model_inputs["uid"]
                    # advantages = model_inputs["advantages"]
 
                     clip_ratio = self.config.clip_ratio
@@ -417,9 +419,16 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                     )
-                    print("zsazsa", log_prob.size(), response_mask.size(), response_attention_mask.size(), response_mask)
-                    print("syl", response_attention_mask)
-                    advantages = torch.sum(log_prob * response_attention_mask * (~response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
+                    print("zsazsa", torch.sum(response_mask, dim=-1) - torch.sum(response_attention_mask, dim=-1))
+                    reward_scores = torch.sum(log_prob * response_attention_mask * (~response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
+
+                    advantages, returns = core_algos.compute_grpo_outcome_advantage(
+                        reward_scores=reward_scores,
+                        response_mask=response_mask,
+                        index=uid,
+                        norm_adv_by_std_in_grpo=True,
+                    )
+
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
                     if self.config.policy_loss.loss_mode == "vanilla":
