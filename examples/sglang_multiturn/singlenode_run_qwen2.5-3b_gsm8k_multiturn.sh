@@ -43,8 +43,8 @@ python3 -m verl.trainer.main_ppo \
     trainer.experiment_name='qwen2.5-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=-1 \
-    trainer.test_freq=20 \
+    trainer.save_freq=10 \
+    trainer.test_freq=10 \
     trainer.total_epochs=15 \
     data.train_files=$HOME/data/gsm8k/train.parquet \
     data.val_files=$HOME/data/gsm8k/test.parquet \

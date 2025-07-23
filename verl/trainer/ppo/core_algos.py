@@ -293,8 +293,10 @@ def compute_grpo_outcome_advantage(
 
     with torch.no_grad():
         bsz = reward_scores.shape[0]
+        print("sssssas", bsz)
         for i in range(bsz):
             id2score[index[i]].append(reward_scores[i])
+        print("zzzzzzsa", len(id2score))
         for idx in id2score:
             if len(id2score[idx]) == 1:
                 id2mean[idx] = torch.tensor(0.0)

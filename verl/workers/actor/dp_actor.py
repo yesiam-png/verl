@@ -314,11 +314,12 @@ class DataParallelPPOActor(BasePPOActor):
         temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
         use_dynamic_bsz = data.meta_info["use_dynamic_bsz"]
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
-        select_keys = ["responses", "input_ids", "attention_mask", "position_ids"]
-        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
+        select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "response_mask", "response_attention_mask"]
+        non_tensor_select_keys = ["multi_modal_inputs", "uid"] if has_multi_modal_inputs else ["uid"]
 
         data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
-
+        uid = data.non_tensor_batch["uid"]
+        response_mask_all = data.batch["response_mask"]
         if use_dynamic_bsz:
             max_token_len = data.meta_info["max_token_len"] * self.ulysses_sequence_parallel_size
             micro_batches, batch_idx_list = prepare_dynamic_batch(data, max_token_len=max_token_len)
@@ -327,15 +328,32 @@ class DataParallelPPOActor(BasePPOActor):
 
         log_probs_lst = []
         entropy_lst = []
+        reward_lst = []
         for micro_batch in micro_batches:
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
+            response_attention_mask = model_inputs["response_attention_mask"]
+            response_mask = model_inputs["response_mask"]
             with torch.no_grad():
                 entropy, log_probs = self._forward_micro_batch(
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
+                gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
+                reward_scores = (log_probs * gt_mask).sum(dim=-1)   # shape [batch]
+                count    = gt_mask.sum(dim=-1)        # shape [batch]
+                reward_scores = (reward_scores / count.clamp_min(1)).detach()
+
+                #  reward_scores = (log_prob * gt_mask).sum(dim=-1).detach()  # TODO: need to change this to separated sum
             log_probs_lst.append(log_probs)
+            reward_lst.append(reward_scores)
             if calculate_entropy:
                 entropy_lst.append(entropy)
+        reward_scores = torch.concat(reward_lst, dim=0)
+        advantages, returns = core_algos.compute_grpo_outcome_advantage(
+            reward_scores=reward_scores,
+            response_mask=response_mask_all,
+            index=uid,
+            norm_adv_by_std_in_grpo=True,
+        )
 
         log_probs = torch.concat(log_probs_lst, dim=0)
         entropys = None
@@ -347,7 +365,7 @@ class DataParallelPPOActor(BasePPOActor):
             if calculate_entropy:
                 entropys = restore_dynamic_batch(entropys, batch_idx_list)
 
-        return log_probs, entropys
+        return log_probs, entropys, reward_scores, advantages
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):
@@ -363,14 +381,13 @@ class DataParallelPPOActor(BasePPOActor):
             "attention_mask",
             "position_ids",
             "old_log_probs",
-            "response_attention_mask",
-         #   "advantages",
+            "advantages",
         ]
         if self.config.use_kl_loss:
             select_keys.append("ref_log_prob")
 
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
-        non_tensor_select_keys = ["multi_modal_inputs", "uid"] if has_multi_modal_inputs else ["uid"]
+        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
 
         data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
 
@@ -397,9 +414,7 @@ class DataParallelPPOActor(BasePPOActor):
                     model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
                     response_mask = model_inputs["response_mask"]
                     old_log_prob = model_inputs["old_log_probs"]
-                    response_attention_mask = model_inputs["response_attention_mask"]
-                    uid = model_inputs["uid"]
-                   # advantages = model_inputs["advantages"]
+                    advantages = model_inputs["advantages"]
 
                     clip_ratio = self.config.clip_ratio
                     clip_ratio_low = (
@@ -419,20 +434,22 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                     )
+                    """
                     with torch.no_grad():
-                        reward_scores = torch.mean(log_prob * response_attention_mask * (torch.ones_like(response_mask) - response_mask), dim=-1).detach()  # TODO: need to change this to separated sum
-                 #   print("reward_scoresreward_scores", reward_scores)
-                 #   print("(torch.ones_like(response_mask) - response_mask)", (response_mask))
-                 #   print("response_attention_mask", response_attention_mask)
-                 #   print("log_problog_prob", log_prob)
-                 #   print("sssssum", torch.sum(response_attention_mask * (torch.ones_like(response_mask) - response_mask), dim=-1))
-                 #   print("final", response_attention_mask * (torch.ones_like(response_mask) - response_mask))
+                        gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
+                        reward_scores = (log_prob * gt_mask).sum(dim=-1)   # shape [batch]
+                        count    = gt_mask.sum(dim=-1)        # shape [batch]
+                        reward_scores = (reward_scores / count.clamp_min(1)).detach()
+
+                      #  reward_scores = (log_prob * gt_mask).sum(dim=-1).detach()  # TODO: need to change this to separated sum
+
                     advantages, returns = core_algos.compute_grpo_outcome_advantage(
                         reward_scores=reward_scores,
                         response_mask=response_mask,
                         index=uid,
                         norm_adv_by_std_in_grpo=True,
                     )
+                    """
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
@@ -493,6 +510,12 @@ class DataParallelPPOActor(BasePPOActor):
                             "actor/pg_clipfrac": pg_clipfrac.detach().item(),
                             "actor/ppo_kl": ppo_kl.detach().item(),
                             "actor/pg_clipfrac_lower": pg_clipfrac_lower.detach().item(),
+                         #   "critic/rewards/mean": torch.mean(reward_scores).detach().item(),
+                         #   "critic/rewards/max": torch.max(reward_scores).detach().item(),
+                         #   "critic/rewards/min": torch.min(reward_scores).detach().item(),
+                         #   "critic/advantages/mean": torch.mean(advantages).detach().item(),
+                         #   "critic/advantages/max": torch.max(advantages).detach().item(),
+                         #   "critic/advantages/min": torch.min(advantages).detach().item(),
                         }
                     )
                     append_to_dict(metrics, micro_batch_metrics)
