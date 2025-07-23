@@ -342,6 +342,9 @@ class DataParallelPPOActor(BasePPOActor):
                 count    = gt_mask.sum(dim=-1)        # shape [batch]
                 reward_scores = (reward_scores / count.clamp_min(1)).detach()
 
+               # all_masked = log_probs[0][gt_mask[0].bool()]
+                #print("zsaaaaaaaaaaa:", reward_scores)
+
                 #  reward_scores = (log_prob * gt_mask).sum(dim=-1).detach()  # TODO: need to change this to separated sum
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)

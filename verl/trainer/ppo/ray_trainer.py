@@ -1298,9 +1298,9 @@ class RayPPOTrainer:
                         norm_adv_by_std_in_grpo = self.config.algorithm.get(
                             "norm_adv_by_std_in_grpo", True
                         )  # GRPO adv normalization factor
-
+                        reward_scores_copy = batch.batch["reward_scores"].clone()
                         advantages, returns = core_algos.compute_grpo_outcome_advantage(
-                            reward_scores=batch.batch["reward_scores"],
+                            reward_scores=reward_scores_copy,
                             response_mask=batch.batch["response_mask"],
                             index=batch.non_tensor_batch["uid"],
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
@@ -1397,6 +1397,7 @@ class RayPPOTrainer:
                         "training/epoch": epoch,
                     }
                 )
+
                 # collect metrics
                 metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))
                 metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
