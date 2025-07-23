@@ -1292,14 +1292,22 @@ class RayPPOTrainer:
                         else:
                             batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
                         #"""
-                        
-                        """
+
                         # compute advantages, executed on the driver process
 
                         norm_adv_by_std_in_grpo = self.config.algorithm.get(
                             "norm_adv_by_std_in_grpo", True
                         )  # GRPO adv normalization factor
 
+                        advantages, returns = core_algos.compute_grpo_outcome_advantage(
+                            reward_scores=batch.batch["reward_scores"],
+                            response_mask=batch.batch["response_mask"],
+                            index=batch.non_tensor_batch["uid"],
+                            norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
+                        )
+                        batch.batch["advantages"] = advantages
+
+                        """
                         batch = compute_advantage(
                             batch,
                             adv_estimator=self.config.algorithm.adv_estimator,

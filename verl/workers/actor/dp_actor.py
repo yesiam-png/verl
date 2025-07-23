@@ -315,11 +315,11 @@ class DataParallelPPOActor(BasePPOActor):
         use_dynamic_bsz = data.meta_info["use_dynamic_bsz"]
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
         select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "response_mask", "response_attention_mask"]
-        non_tensor_select_keys = ["multi_modal_inputs", "uid"] if has_multi_modal_inputs else ["uid"]
+        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
 
         data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
-        uid = data.non_tensor_batch["uid"]
-        response_mask_all = data.batch["response_mask"]
+        #uid = data.non_tensor_batch["uid"]
+        #response_mask_all = data.batch["response_mask"]
         if use_dynamic_bsz:
             max_token_len = data.meta_info["max_token_len"] * self.ulysses_sequence_parallel_size
             micro_batches, batch_idx_list = prepare_dynamic_batch(data, max_token_len=max_token_len)
@@ -348,13 +348,6 @@ class DataParallelPPOActor(BasePPOActor):
             if calculate_entropy:
                 entropy_lst.append(entropy)
         reward_scores = torch.concat(reward_lst, dim=0)
-        advantages, returns = core_algos.compute_grpo_outcome_advantage(
-            reward_scores=reward_scores,
-            response_mask=response_mask_all,
-            index=uid,
-            norm_adv_by_std_in_grpo=True,
-        )
-
         log_probs = torch.concat(log_probs_lst, dim=0)
         entropys = None
         if calculate_entropy:
@@ -362,10 +355,17 @@ class DataParallelPPOActor(BasePPOActor):
 
         if use_dynamic_bsz:
             log_probs = restore_dynamic_batch(log_probs, batch_idx_list)
+            reward_scores = restore_dynamic_batch(reward_scores, batch_idx_list)
             if calculate_entropy:
                 entropys = restore_dynamic_batch(entropys, batch_idx_list)
-
-        return log_probs, entropys, reward_scores, advantages
+        
+#        advantages, returns = core_algos.compute_grpo_outcome_advantage(
+#            reward_scores=reward_scores,
+#            response_mask=response_mask_all,
+#            index=uid,
+#            norm_adv_by_std_in_grpo=True,
+#        )
+        return log_probs, entropys, reward_scores#, advantages
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):
