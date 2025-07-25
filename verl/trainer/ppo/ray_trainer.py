@@ -1301,11 +1301,13 @@ class RayPPOTrainer:
                         reward_scores_copy = batch.batch["reward_scores"].clone()
                         advantages, returns = core_algos.compute_grpo_outcome_advantage(
                             reward_scores=reward_scores_copy,
+                            responses=batch.batch["responses"],
                             response_mask=batch.batch["response_mask"],
                             index=batch.non_tensor_batch["uid"],
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                         )
                         batch.batch["advantages"] = advantages
+                        print("advantagesadvantages", advantages)
 
                         """
                         batch = compute_advantage(

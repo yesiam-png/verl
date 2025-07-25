@@ -83,7 +83,7 @@ def compute_score(solution_str, ground_truth, method="strict", format_score=0.0,
         format_score: the score for the format
         score: the score for the correct answer
     """
-    solution_str, sep, tail = solution_str.rpartition("\n#### ")
+    #solution_str, sep, tail = solution_str.rpartition("\n#### ")
 
     answer = extract_solution(solution_str=solution_str, method=method)
     if answer is None:

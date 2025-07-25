@@ -127,7 +127,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
         valid_values = torch.masked_select(values, response_mask)
         return_diff_var = torch.var(valid_returns - valid_values)
         return_var = torch.var(valid_returns)
-
+  #  print(" torch.mean(valid_adv).detach().item()",  torch.mean(valid_adv).detach().item(), valid_adv)
     metrics = {
         # score
      #   "critic/score/mean": torch.mean(sequence_score).detach().item(),

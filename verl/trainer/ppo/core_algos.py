@@ -246,6 +246,7 @@ def compute_gae_advantage_return(
 def compute_grpo_outcome_advantage(
     reward_scores: torch.Tensor,
   #  token_level_rewards: torch.Tensor,
+    responses: torch.Tensor,
     response_mask: torch.Tensor,
     index: np.ndarray,
     epsilon: float = 1e-6,
@@ -291,11 +292,23 @@ def compute_grpo_outcome_advantage(
     id2mean = {}
     id2std = {}
 
+    #responses_list = defaultdict(list)
+    #from transformers import AutoTokenizer
+    #tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B-Instruct", trust_remote_code=True)
+
     with torch.no_grad():
         bsz = reward_scores.shape[0]
         for i in range(bsz):
             id2score[index[i]].append(reward_scores[i])
-        for idx in id2score:
+          #  responses_list[index[i]].append(responses[i])
+        for i, idx in enumerate(id2score):
+            """
+            if i <= 5:
+           #     print(f"Group {idx} has {len(id2score[idx])} responses:")
+                for rew, response in zip(id2score[idx], responses_list[idx]):
+                    response_text = tokenizer.decode(response, skip_special_tokens=True)
+                    print(f"Score is {rew}. for  Response: {response_text}")
+            """
             if len(id2score[idx]) == 1:
                 id2mean[idx] = torch.tensor(0.0)
                 id2std[idx] = torch.tensor(1.0)

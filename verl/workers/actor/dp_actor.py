@@ -333,17 +333,21 @@ class DataParallelPPOActor(BasePPOActor):
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
             response_attention_mask = model_inputs["response_attention_mask"]
             response_mask = model_inputs["response_mask"]
+            
+            response_ids = model_inputs["responses"]
             with torch.no_grad():
                 entropy, log_probs = self._forward_micro_batch(
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
-                reward_scores = (log_probs * gt_mask).sum(dim=-1)   # shape [batch]
+
+                reward_scores = (torch.exp(log_probs) * gt_mask).sum(dim=-1)   # shape [batch]
                 count    = gt_mask.sum(dim=-1)        # shape [batch]
                 reward_scores = (reward_scores / count.clamp_min(1)).detach()
 
+                reward_scores = torch.clamp(reward_scores, max=0.7)
+
                # all_masked = log_probs[0][gt_mask[0].bool()]
-                #print("zsaaaaaaaaaaa:", reward_scores)
 
                 #  reward_scores = (log_prob * gt_mask).sum(dim=-1).detach()  # TODO: need to change this to separated sum
             log_probs_lst.append(log_probs)
