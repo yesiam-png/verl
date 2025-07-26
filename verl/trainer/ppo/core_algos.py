@@ -317,11 +317,13 @@ def compute_grpo_outcome_advantage(
                 id2std[idx] = torch.std(torch.tensor([id2score[idx]]))
             else:
                 raise ValueError(f"no score in prompt index: {idx}")
+        """
         for i in range(bsz):
             if norm_adv_by_std_in_grpo:
                 reward_scores[i] = (reward_scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
             else:
                 reward_scores[i] = reward_scores[i] - id2mean[index[i]]
+        """
         reward_scores = reward_scores.unsqueeze(-1) * response_mask
 
     return reward_scores, reward_scores
