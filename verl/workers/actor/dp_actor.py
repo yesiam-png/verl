@@ -341,11 +341,16 @@ class DataParallelPPOActor(BasePPOActor):
                 )
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
 
-                reward_scores = (torch.exp(log_probs) * gt_mask).sum(dim=-1)   # shape [batch]
+                reward_scores = torch.clamp(torch.exp(log_probs), max=0.4)
+                reward_scores = (reward_scores * gt_mask).sum(dim=-1)   # shape [batch]
+#                reward_scores = (torch.exp(log_probs) * gt_mask).sum(dim=-1)   # shape [batch]
                 count    = gt_mask.sum(dim=-1)        # shape [batch]
                 reward_scores = (reward_scores / count.clamp_min(1)).detach()
 
-              #  reward_scores = torch.clamp(reward_scores, max=0.7)
+#                reward_scores = torch.clamp(reward_scores, max=0.3)
+
+                all_masked = torch.exp(log_probs)[0][gt_mask[0].bool()]
+                print("all_masked", all_masked)
 
                # all_masked = log_probs[0][gt_mask[0].bool()]
 

@@ -53,8 +53,8 @@ if __name__ == "__main__":
     def make_map_fn(split):
         def process_fn(example, idx):
             question_raw = example.pop("question")
-
-            system_prompt = "Think step by step and output the final answer directly after `#### `.\n\n"
+            system_prompt = "Generate a concise reasoning for the following problem.\n"
+#            system_prompt = "Think step by step and output the final answer directly after `#### `.\n\n"
             question = system_prompt + question_raw + "\n\n" #+ " " + instruction_following
 
             answer_raw = example.pop("answer")
