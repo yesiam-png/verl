@@ -416,7 +416,10 @@ class AsyncRolloutRequest(BaseModel):
             processing_class, messages, multi_modal_data={}, tools=tools, add_generation_prompt=False, tokenize=True
         )[..., self.base_conv_with_gen_prompt_end_pos :]
         """
+        if not content:
+            content = "\n"
         content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)
+        #content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)
         content_ids = dict(content_ids)["input_ids"]
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=True)
 

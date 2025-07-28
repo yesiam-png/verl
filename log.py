@@ -15,7 +15,7 @@ def run_inference(model_name, prompts, output_file, max_tokens=22800, temperatur
     #engine = LLM(model=model_name, trust_remote_code=True)
     engine = sgl.Engine(model_path=model_name,)
 #    sampling_params = SamplingParams(temperature=temperature, max_tokens=max_tokens, skip_special_tokens=False)  # stop=["####"],
-    sampling_params = {"temperature":temperature, "skip_special_tokens": False}  # stop=["####"],
+    sampling_params = {"temperature":temperature, "skip_special_tokens": False, "max_new_tokens": 512}  # stop=["####"],
 
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
@@ -78,7 +78,7 @@ def main():
    # dataset2 = load_dataset("agentica-org/DeepCoder-Preview-Dataset", "lcbv5", split="train[:15]")
     prompts = dataset1["question"]
     # List of model checkpoints
-    models = ["/mnt/task_wrapper/user_output/artifacts/checkpoints/gsm8k_async_rl/nostdnomean-500len-newprompt-03up-llama-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards/global_step_105/actor/huggingface",
+    models = ["/mnt/task_wrapper/user_output/artifacts/checkpoints/gsm8k_async_rl/pertoken04up-qwenbase-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards/global_step_80/actor/huggingface",
    # "/mnt/task_runtime/global_step_60/actor/huggingface",
     #"/mnt/task_wrapper/user_output/artifacts/checkpoints/gsm8k_async_rl/qwen2.5-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards/global_step_60/actor/huggingface",#"USERNAME/Llama-3.2-1B", "USERNAME/code_cpt"
       #  "/mnt/task_wrapper/user_output/artifacts/checkpoints/deepcoder/llama1b-cpt-12k/actor/global_step_10",
@@ -91,8 +91,8 @@ def main():
 
     for model_path in models:
         step = model_path[-25:-18]#.split("step_")[-1]
-        output_file = f"./llamawhy.jsonl"
-        repo_name = f"{USERNAME}/llamawhy"
+        output_file = f"./qwen80.jsonl"
+        repo_name = f"{USERNAME}/qwen80"
         
         # Run inference and save locally
         run_inference(model_path, prompts, output_file)
