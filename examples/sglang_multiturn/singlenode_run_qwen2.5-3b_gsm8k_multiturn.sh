@@ -34,8 +34,8 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.name=sglang \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
     actor_rollout_ref.rollout.n=5 \
-    +actor_rollout_ref.rollout.per_turn_response_length=500 \
-    actor_rollout_ref.rollout.response_length=512 \
+    +actor_rollout_ref.rollout.per_turn_response_length=128 \
+    actor_rollout_ref.rollout.response_length=4096 \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
@@ -47,7 +47,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=-1 \
     trainer.total_epochs=15 \
     data.train_files=/mnt/task_runtime/sync_python_removeassert.parquet \
-    data.val_files=/mnt/task_runtime/sync_python_removeassert.parquet \
+    data.val_files=/mnt/task_runtime/dummytest.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
     actor_rollout_ref.rollout.multi_turn.max_user_turns=1 \
     $@
