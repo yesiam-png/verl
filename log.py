@@ -24,7 +24,7 @@ def run_inference(model_name, prompts, output_file, max_tokens=22800, temperatur
            # chat_prompt = prompt + "\n\nPresent your Python code within \n```python\nYour code\n```\nbelow.\n\n"
 
 
-            chat_prompt =  "Think step by step and output the final answer after `####`.\n\n" + prompt + "\n\n"
+            chat_prompt =  "Generate a concise reasoning for the following problem.\n" + prompt + "\n\n"
 
            # message = [{"role": "user", "content": chat_prompt}]
            # chat_prompt = tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
