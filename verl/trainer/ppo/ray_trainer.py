@@ -1307,7 +1307,6 @@ class RayPPOTrainer:
                             norm_adv_by_std_in_grpo=False,
                         )
                         batch.batch["advantages"] = advantages
-                        print("advantagesadvantages", advantages)
 
                         """
                         batch = compute_advantage(
