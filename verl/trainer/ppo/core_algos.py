@@ -294,7 +294,7 @@ def compute_grpo_outcome_advantage(
 
     responses_list = defaultdict(list)
     from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained("ZhangShenao/Llama-3.2-3B", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
 
     with torch.no_grad():
         bsz = reward_scores.shape[0]

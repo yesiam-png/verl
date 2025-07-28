@@ -23,8 +23,9 @@ def run_inference(model_name, prompts, output_file, max_tokens=22800, temperatur
         for prompt in tqdm(prompts, desc=f"Inferencing with {model_name}"):
            # chat_prompt = prompt + "\n\nPresent your Python code within \n```python\nYour code\n```\nbelow.\n\n"
 
-
-            chat_prompt =  "Generate a concise reasoning for the following problem.\n" + prompt + "\n\n"
+            system_prompt = "For the following problem, generate either a brief analysis beginning with <think> or directly outputting the answer beginning with <answer>.\n"
+            #system_prompt = "Generate a concise reasoning for the following problem.\n" 
+            chat_prompt =  system_prompt + prompt + "\n\n"
 
            # message = [{"role": "user", "content": chat_prompt}]
            # chat_prompt = tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
@@ -74,11 +75,11 @@ def main():
         raise EnvironmentError("Please set your HF_HUB_TOKEN environment variable")
 
     # Load datasets
-    dataset1 = load_dataset("openai/gsm8k", 'main', split="train[:10]")
+    dataset1 = load_dataset("openai/gsm8k", 'main', split="train[:30]")
    # dataset2 = load_dataset("agentica-org/DeepCoder-Preview-Dataset", "lcbv5", split="train[:15]")
     prompts = dataset1["question"]
     # List of model checkpoints
-    models = ["/mnt/task_wrapper/user_output/artifacts/checkpoints/gsm8k_async_rl/pertoken04up-qwenbase-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards/global_step_80/actor/huggingface",
+    models = ["/mnt/task_wrapper/user_output/artifacts/checkpoints/gsm8k_async_rl/format2-logr-mean-nostd-qwen-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards/global_step_30/actor/huggingface",
    # "/mnt/task_runtime/global_step_60/actor/huggingface",
     #"/mnt/task_wrapper/user_output/artifacts/checkpoints/gsm8k_async_rl/qwen2.5-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards/global_step_60/actor/huggingface",#"USERNAME/Llama-3.2-1B", "USERNAME/code_cpt"
       #  "/mnt/task_wrapper/user_output/artifacts/checkpoints/deepcoder/llama1b-cpt-12k/actor/global_step_10",
@@ -91,8 +92,8 @@ def main():
 
     for model_path in models:
         step = model_path[-25:-18]#.split("step_")[-1]
-        output_file = f"./qwen80.jsonl"
-        repo_name = f"{USERNAME}/qwen80"
+        output_file = f"./format2_step30.jsonl"
+        repo_name = f"{USERNAME}/format2_step30"
         
         # Run inference and save locally
         run_inference(model_path, prompts, output_file)

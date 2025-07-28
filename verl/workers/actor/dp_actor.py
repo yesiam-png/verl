@@ -329,6 +329,8 @@ class DataParallelPPOActor(BasePPOActor):
         log_probs_lst = []
         entropy_lst = []
         reward_lst = []
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for micro_batch in micro_batches:
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
             response_attention_mask = model_inputs["response_attention_mask"]
@@ -347,6 +349,16 @@ class DataParallelPPOActor(BasePPOActor):
                 count    = gt_mask.sum(dim=-1)        # shape [batch]
                 reward_scores = (reward_scores / count.clamp_min(1)).detach()
 
+                format_reward = torch.zeros_like(reward_scores)
+                response_str = tokenizer.batch_decode(response_ids, skip_special_tokens=True)
+                for i, response in enumerate(response_str):
+                    if response.startswith("<think>") or response.startswith("<answer>"):
+                        format_reward[i] = 1.0
+                        if response.startswith("<answer>"):
+                            format_reward[i] = 2.0
+                     
+                reward_scores = reward_scores + format_reward
+                print(format_reward)
 #                reward_scores = torch.clamp(reward_scores, max=0.3)
 
                 all_masked = torch.exp(log_probs)[0][gt_mask[0].bool()]
