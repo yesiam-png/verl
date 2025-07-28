@@ -44,10 +44,10 @@ python3 -m verl.trainer.main_ppo \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=10 \
-    trainer.test_freq=10 \
+    trainer.test_freq=-1 \
     trainer.total_epochs=15 \
-    data.train_files=$HOME/data/gsm8k/train.parquet \
-    data.val_files=$HOME/data/gsm8k/test.parquet \
+    data.train_files=/mnt/task_runtime/sync_python_removeassert.parquet \
+    data.val_files=/mnt/task_runtime/sync_python_removeassert.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
     actor_rollout_ref.rollout.multi_turn.max_user_turns=1 \
     $@
