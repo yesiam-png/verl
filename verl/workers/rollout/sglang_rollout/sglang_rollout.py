@@ -892,6 +892,8 @@ class SGLangRollout(BaseRollout):
                 #    _req.add_assistant_message(self.processing_class, content)
                 #    break
                 #else:
+
+
                 if self._function_call_parser and self._function_call_parser.has_tool_call(content):
                     finish_reason_type = FinishReasonTypeEnum.TOOL_CALL
                     _req.state = AsyncRolloutRequestStateEnum.TOOL_CALLING
@@ -934,21 +936,6 @@ class SGLangRollout(BaseRollout):
                         self.processing_class,
                         content,
                     )
-                    """
-                    # newly added by me
-                    messages = [{"role": x.role, "content": x.content} for x in _req.messages]
-                    # Get interaction by name from interaction_kwargs
-                    interaction_name = _req.interaction_kwargs.get(
-                        "name", "gsm8k"
-                    )
-
-                    interaction = self.interaction_map[interaction_name]
-                    should_terminate_sequence, content, reward, metrics = await interaction.generate_response(
-                        _req.request_id, messages, **_req.interaction_kwargs
-                    )  # we need reward in all_rewards
-                    break
-                    """
-
                     assert _req.interaction_kwargs and self.interaction_map
                     if (
                         _req.interaction_kwargs
@@ -979,8 +966,10 @@ class SGLangRollout(BaseRollout):
                     _req.request_id, messages, **_req.interaction_kwargs
                 )
                 user_turn_rewards.append(reward)
-                _req.add_user_message(self.processing_class, content)
-                if should_terminate_sequence:
+                _req.add_user_message(self.processing_class, user_turns)
+                print("turns_debug", user_turns, current_turns, _req.input_ids.size())
+                print("zsadec", self.processing_class.decode(_req.input_ids.squeeze(0).tolist()))
+                if should_terminate_sequence or user_turns >= len(_req.split_lines) - 1 or len(_req.get_generation_prompt_ids(self.processing_class)) >= self.config.response_length:
                     finish_reason_type = FinishReasonTypeEnum.STOP
                     _req.state = AsyncRolloutRequestStateEnum.COMPLETED
                     break
@@ -1022,7 +1011,7 @@ class SGLangRollout(BaseRollout):
         self, generation_prompt_ids: list[int], sampling_params: dict, image_data: Optional[list[Any]] = None
     ) -> dict:
 #        max_new_tokens = min(self.config.response_length, self.config.max_model_len - len(generation_prompt_ids) - 1)
-        max_new_tokens = min(self.config.per_turn_response_length, self.config.response_length - len(generation_prompt_ids) - 1)
+        max_new_tokens = self.config.per_turn_response_length # min(self.config.per_turn_response_length, self.config.response_length - len(generation_prompt_ids) - 1)
         kwargs = sampling_params.copy()
         kwargs["max_new_tokens"] = max_new_tokens
         kwargs["n"] = 1  # group size is supported in preprocess
@@ -1257,6 +1246,7 @@ class SGLangRollout(BaseRollout):
         multi_modal_data_list = prompts.non_tensor_batch.get(
             "multi_modal_data", [None] * len(prompts.non_tensor_batch["raw_prompt"])
         )
+        split_lines = prompts.non_tensor_batch["split_lines"]
 
         for data_idx, (raw_prompt, multi_modal_data) in enumerate(
             zip(prompts.non_tensor_batch["raw_prompt"], multi_modal_data_list, strict=True)
@@ -1282,12 +1272,12 @@ class SGLangRollout(BaseRollout):
                 request_id=str(uuid4()),
                 state=AsyncRolloutRequestStateEnum.PENDING,
                 messages=raw_prompt,#.tolist(),
-                split_lines=prompts.non_tensor_batch["split_lines"],
+                split_lines=split_lines[data_idx],
                 multi_modal_data=multi_modal_data,
                 tool_schemas=_tool_schemas,
                 tools_kwargs=_tools_kwargs,
                 interaction_kwargs=_interaction_kwargs,
-                input_ids=_input_ids,
+                input_ids=None,#_input_ids,
                 response_ids=None,
                 attention_mask=_attention_mask,
                 response_attention_mask=None,

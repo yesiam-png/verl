@@ -130,7 +130,7 @@ class AsyncRolloutRequest(BaseModel):
             raise ValueError("processing_class is required for AsyncRolloutRequest initialization")
 
         values["messages"] = messages # [Message.model_validate(msg) for msg in messages]
-        values["split_lines"] = messages.splitlines()
+#        values["split_lines"] = split_lines
         # If there is no multi_modal_keys, we assume the multi-modal data is image and video.
         if not values.get("multi_modal_keys"):
             values["multi_modal_keys"] = ["image", "video"]
@@ -312,7 +312,6 @@ class AsyncRolloutRequest(BaseModel):
         self.attention_mask = torch.cat([self.attention_mask, attention_mask], dim=-1)
         loss_mask = torch.ones_like(new_input_ids) * int(loss_mask)
         self.loss_mask = torch.cat([self.loss_mask, loss_mask], dim=-1)
-
         if new_multi_modal_inputs:
             self._update_multi_modal_inputs(new_multi_modal_inputs)
 
@@ -324,7 +323,6 @@ class AsyncRolloutRequest(BaseModel):
         new_position_ids = new_position_ids + (last_pos + 1)
 
         self.position_ids = torch.cat([self.position_ids, new_position_ids], dim=-1)
-
         assert (
             self.input_ids.shape[-1]
             == self.attention_mask.shape[-1]
@@ -376,7 +374,8 @@ class AsyncRolloutRequest(BaseModel):
     def add_user_message(
         self,
         processing_class: PreTrainedTokenizer | PreTrainedTokenizerFast | ProcessorMixin,
-        content: str,
+       # content: str,
+        user_turns: int,
     ) -> None:
         """
         self.messages.append(Message(role="user", content=content))
@@ -389,9 +388,8 @@ class AsyncRolloutRequest(BaseModel):
             processing_class, messages, multi_modal_data={}, tools=tools, add_generation_prompt=False, tokenize=True
         )[..., self.base_conv_wo_gen_prompt_end_pos :]
         """
-        content_ids = processing_class(text=["\n#### " + content], return_tensors="pt", add_special_tokens=False)
+        content_ids = processing_class(text=["\n" + self.split_lines[user_turns]], return_tensors="pt", add_special_tokens=False)
         content_ids = dict(content_ids)["input_ids"]
-
        # decoded_content = processing_class.batch_decode(self.input_ids, skip_special_tokens=False)
        # print("decoded_old", decoded_content, "oldendiofdecoded_content")
        # decoded_content_ids = processing_class.batch_decode(content_ids, skip_special_tokens=False)
@@ -417,7 +415,7 @@ class AsyncRolloutRequest(BaseModel):
             processing_class, messages, multi_modal_data={}, tools=tools, add_generation_prompt=False, tokenize=True
         )[..., self.base_conv_with_gen_prompt_end_pos :]
         """
-        if not content:
+        if content == "":
             content = "\n"
         content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)
         #content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)

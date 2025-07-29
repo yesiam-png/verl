@@ -121,13 +121,13 @@ if __name__ == "__main__":
                 no_asserts = no_asserts[: last_fence + 1]
             question_raw = "\n".join(no_asserts)
 
-            system_prompt = "Generate either a comment as your thinking process before writing the next several lines of code, or directly write the next line of code."
+            system_prompt = "Generate either a comment as your thinking process for the next several lines of code, or skip directly to the next line."
             question = system_prompt + question_raw
 
             split_lines = split_on_code_line(question)
-            split_lines[0] = split_lines[0] + split_lines[1]
+            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
             del split_lines[1]
-            split_lines[0] = split_lines[0] + split_lines[1]
+            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
             del split_lines[1]
 
             answer_raw = ""

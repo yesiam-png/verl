@@ -75,8 +75,8 @@ class Gsm8kInteraction(BaseInteraction):
            # response = "Your response is incorrect! You need to reflect on your answer and try again."
             should_terminate_sequence = False
         """
-        response = self._instance_dict[instance_id]["ground_truth"]  # "#### " + 
-        should_terminate_sequence = True
+        response = self._instance_dict[instance_id]["ground_truth"]
+        should_terminate_sequence = False
         reward = 1.0
         return should_terminate_sequence, response, reward, {}
 
