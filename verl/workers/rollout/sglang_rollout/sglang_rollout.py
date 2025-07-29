@@ -1229,8 +1229,8 @@ class SGLangRollout(BaseRollout):
         return DataProto(
             batch=batch,
             non_tensor_batch={
-                "messages": np.array(messages),
-                "reward_scores": np.array(reward_scores),
+          #      "messages": np.array(messages),
+          #      "reward_scores": np.array(reward_scores),
                 "multi_modal_inputs": np.array(multi_modal_inputs, dtype=object),
             },
         )
