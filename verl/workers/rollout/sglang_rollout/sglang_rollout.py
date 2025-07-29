@@ -936,6 +936,7 @@ class SGLangRollout(BaseRollout):
                         self.processing_class,
                         content,
                     )
+                    print("turnsturns", user_turns, current_turns, self.processing_class.decode(content.squeeze(0).tolist()))
                     assert _req.interaction_kwargs and self.interaction_map
                     if (
                         _req.interaction_kwargs
@@ -967,8 +968,6 @@ class SGLangRollout(BaseRollout):
                 )
                 user_turn_rewards.append(reward)
                 _req.add_user_message(self.processing_class, user_turns)
-                print("turns_debug", user_turns, current_turns, _req.input_ids.size())
-                print("zsadec", self.processing_class.decode(_req.input_ids.squeeze(0).tolist()))
                 if should_terminate_sequence or user_turns >= len(_req.split_lines) - 1 or len(_req.get_generation_prompt_ids(self.processing_class)) >= self.config.response_length:
                     finish_reason_type = FinishReasonTypeEnum.STOP
                     _req.state = AsyncRolloutRequestStateEnum.COMPLETED

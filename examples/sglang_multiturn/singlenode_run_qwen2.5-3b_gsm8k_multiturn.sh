@@ -13,8 +13,8 @@ python3 -m verl.trainer.main_ppo \
     --config-name='gsm8k_multiturn_grpo' \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=1024 \
-    data.max_prompt_length=512 \
-    data.max_response_length=1024 \
+    data.max_prompt_length=2048 \
+    data.max_response_length=2048 \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
     data.return_raw_chat=True \
@@ -34,8 +34,8 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.name=sglang \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
     actor_rollout_ref.rollout.n=5 \
-    +actor_rollout_ref.rollout.per_turn_response_length=128 \
-    actor_rollout_ref.rollout.response_length=4096 \
+    +actor_rollout_ref.rollout.per_turn_response_length=16 \
+    actor_rollout_ref.rollout.response_length=2048 \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \

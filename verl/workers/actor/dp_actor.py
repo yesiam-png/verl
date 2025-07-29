@@ -352,13 +352,13 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.zeros_like(reward_scores)
                 response_str = tokenizer.batch_decode(response_ids, skip_special_tokens=True)
                 for i, response in enumerate(response_str):
-                    if response.startswith("<think>"):
+                    if response.lstrip().startswith("#") and response.endswith("\n"):
                         format_reward[i] = 1.0
-                    elif response == "<answer>":
+                    elif response == "\n":
                         format_reward[i] = 3.0
-                     
+                print("format_reward:", format_reward)
+                print("reward_scores:", reward_scores)                     
                 reward_scores = reward_scores + format_reward
-                print(format_reward)
 #                reward_scores = torch.clamp(reward_scores, max=0.3)
 
                 all_masked = torch.exp(log_probs)[0][gt_mask[0].bool()]
