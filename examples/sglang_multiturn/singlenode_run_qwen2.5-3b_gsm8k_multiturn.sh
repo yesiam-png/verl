@@ -13,7 +13,7 @@ python3 -m verl.trainer.main_ppo \
     --config-name='gsm8k_multiturn_grpo' \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=1024 \
-    data.max_prompt_length=512 \
+    data.max_prompt_length=4096 \
     data.max_response_length=1024 \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
@@ -40,14 +40,14 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='gsm8k_async_rl' \
-    trainer.experiment_name='format2-penalty-logr-mean-nostd-qwen-3b_function_rm-gsm8k-async-sgl-multi-w-tool-verify-n16-4cards' \
+    trainer.experiment_name='format2-penalty-logr-mean-nostd-qwen-3b' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=10 \
     trainer.test_freq=-1 \
     trainer.total_epochs=15 \
-    data.train_files=/mnt/task_runtime/sync_python_removeassert.parquet \
-    data.val_files=/mnt/task_runtime/dummytest.parquet \
+    data.train_files=/root/data/sync_code/train.parquet \
+    data.val_files=/root/data/sync_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
     actor_rollout_ref.rollout.multi_turn.max_user_turns=1 \
     $@

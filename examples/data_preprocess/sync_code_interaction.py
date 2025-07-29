@@ -41,6 +41,65 @@ if __name__ == "__main__":
     dataset = datasets.load_dataset(data_source, "algorithmic_corpus")
 
     train_dataset = dataset["train"]
+
+    def split_on_code_line(code_text: str, comment_char: str = '#', block_delimiters=('"""', "'''")) -> list[str]:
+        """
+        Splits a block of text into a list of strings, accounting for multi-line
+        comment blocks. Each string ends with the first line of code it encounters.
+
+        Args:
+            code_text: The multi-line string of code to split.
+            comment_char: The character that indicates a single-line comment.
+            block_delimiters: A tuple of strings that start and end block comments.
+
+        Returns:
+            A list of strings, where each element is a block of comments,
+            blank lines, and the single line of code that follows it.
+        """
+        lines = code_text.splitlines(keepends=False) # no \n in it!!!
+        if not lines:
+            return []
+
+        result_chunks = []
+        current_chunk = []
+        in_multiline_comment = False
+
+        for line in lines:
+            stripped = line.strip()
+            is_this_line_code = True  # Assume it's code until proven otherwise
+
+            # 1. Check if we are currently inside a multi-line comment
+            if in_multiline_comment:
+                is_this_line_code = False
+                # Check if this line ends the block
+                if any(d in stripped for d in block_delimiters):
+                    in_multiline_comment = False
+            
+            # 2. Check for other non-code line types
+            elif not stripped:  # An empty line
+                is_this_line_code = False
+            elif stripped.startswith(comment_char):  # A single-line comment
+                is_this_line_code = False
+            elif any(stripped.startswith(d) for d in block_delimiters):  # Starts a multi-line comment
+                is_this_line_code = False
+                # Check if the block also closes on the same line. If not, enter multi-line mode.
+                delimiter = next(d for d in block_delimiters if stripped.startswith(d))
+                if stripped.count(delimiter) < 2:
+                    in_multiline_comment = True
+
+            # 3. Append the line and split if it was determined to be code
+            current_chunk.append(line)
+            if is_this_line_code:
+                result_chunks.append("".join(current_chunk))
+                current_chunk = []
+
+        # Add any trailing lines (e.g., final comments/blank lines)
+        if current_chunk:
+            result_chunks.append("".join(current_chunk))
+
+        return result_chunks
+
+
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
         def process_fn(example, idx):
@@ -62,14 +121,21 @@ if __name__ == "__main__":
                 no_asserts = no_asserts[: last_fence + 1]
             question_raw = "\n".join(no_asserts)
 
-            system_prompt = "# Generate either a comment as your thinking process before writing the next several lines of code, or directly write the next line of code.\n"
+            system_prompt = "Generate either a comment as your thinking process before writing the next several lines of code, or directly write the next line of code."
             question = system_prompt + question_raw
+
+            split_lines = split_on_code_line(question)
+            split_lines[0] = split_lines[0] + split_lines[1]
+            del split_lines[1]
+            split_lines[0] = split_lines[0] + split_lines[1]
+            del split_lines[1]
 
             answer_raw = ""
             solution = ""
             data = {
                 "data_source": data_source,
                 "prompt": question,
+                "split_lines": split_lines,
                 "ability": "math",
                 "reward_model": {"style": "rule", "ground_truth": solution},
                 "extra_info": {

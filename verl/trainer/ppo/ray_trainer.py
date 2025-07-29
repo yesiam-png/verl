@@ -718,6 +718,8 @@ class RayPPOTrainer:
                 non_tensor_batch_keys_to_pop.append("interaction_kwargs")
             if "agent_name" in test_batch.non_tensor_batch:
                 non_tensor_batch_keys_to_pop.append("agent_name")
+            if "split_lines" in test_batch.non_tensor_batch:
+                non_tensor_batch_keys_to_pop.append("split_lines")
             test_gen_batch = test_batch.pop(
                 batch_keys=batch_keys_to_pop,
                 non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
@@ -1150,6 +1152,8 @@ class RayPPOTrainer:
                     non_tensor_batch_keys_to_pop.append("index")
                 if "agent_name" in batch.non_tensor_batch:
                     non_tensor_batch_keys_to_pop.append("agent_name")
+                if "split_lines" in batch.non_tensor_batch:
+                    non_tensor_batch_keys_to_pop.append("split_lines")
 
                 gen_batch = batch.pop(
                     batch_keys=batch_keys_to_pop,
@@ -1165,6 +1169,7 @@ class RayPPOTrainer:
                 with marked_timer("step", timing_raw):
                     # generate a batch
                     with marked_timer("gen", timing_raw, color="red"):
+                        assert "split_lines" in gen_batch.non_tensor_batch
                         if not self.async_rollout_mode:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:

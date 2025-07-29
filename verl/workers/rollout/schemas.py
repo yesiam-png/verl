@@ -88,6 +88,7 @@ class AsyncRolloutRequest(BaseModel):
     request_id: str
     state: AsyncRolloutRequestStateEnum
     messages: str #list[Message]
+    split_lines: list[str]
     multi_modal_keys: Optional[list[str]] = None
     multi_modal_data: Optional[dict[str, Any]] = None
     multi_modal_inputs: Optional[dict[str, torch.Tensor]] = None
@@ -129,7 +130,7 @@ class AsyncRolloutRequest(BaseModel):
             raise ValueError("processing_class is required for AsyncRolloutRequest initialization")
 
         values["messages"] = messages # [Message.model_validate(msg) for msg in messages]
-
+        values["split_lines"] = messages.splitlines()
         # If there is no multi_modal_keys, we assume the multi-modal data is image and video.
         if not values.get("multi_modal_keys"):
             values["multi_modal_keys"] = ["image", "video"]
@@ -165,7 +166,7 @@ class AsyncRolloutRequest(BaseModel):
         ):
             tokenization_dict_with_prompt = cls._handle_apply_chat_template(
                 processing_class,
-                messages,
+                values["split_lines"][0], #messages,
                 multi_modal_data=multi_modal_data,
                 tools=tools,
                 add_generation_prompt=True,

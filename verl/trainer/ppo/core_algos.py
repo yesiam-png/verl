@@ -306,7 +306,7 @@ def compute_grpo_outcome_advantage(
             if i <= 2:
                 print(f"Group {idx} has {len(id2score[idx])} responses:")
                 for rew, response in zip(id2score[idx], responses_list[idx]):
-                    response_text = tokenizer.decode(response, skip_special_tokens=False)
+                    response_text = tokenizer.decode(response, skip_special_tokens=True)
                     print(f"Score is {rew}. for  Response: {response_text}")
            # """
             if len(id2score[idx]) == 1:

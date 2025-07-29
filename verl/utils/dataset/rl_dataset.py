@@ -137,7 +137,7 @@ class RLHFDataset(Dataset):
 
         print(f"dataset len: {len(self.dataframe)}")
 
-        self.dataframe = self.maybe_filter_out_long_prompts(self.dataframe)
+    #    self.dataframe = self.maybe_filter_out_long_prompts(self.dataframe)
 
     def maybe_filter_out_long_prompts(self, dataframe: datasets.Dataset = None):
         # filter out too long prompts

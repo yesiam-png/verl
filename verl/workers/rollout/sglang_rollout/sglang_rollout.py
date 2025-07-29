@@ -1282,6 +1282,7 @@ class SGLangRollout(BaseRollout):
                 request_id=str(uuid4()),
                 state=AsyncRolloutRequestStateEnum.PENDING,
                 messages=raw_prompt,#.tolist(),
+                split_lines=prompts.non_tensor_batch["split_lines"],
                 multi_modal_data=multi_modal_data,
                 tool_schemas=_tool_schemas,
                 tools_kwargs=_tools_kwargs,
