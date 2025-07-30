@@ -35,6 +35,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
     actor_rollout_ref.rollout.n=5 \
     +actor_rollout_ref.rollout.per_turn_response_length=16 \
+    +actor_rollout_ref.rollout.max_code_lines=256 \
     actor_rollout_ref.rollout.response_length=2048 \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
@@ -43,6 +44,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.experiment_name='format2-penalty-logr-mean-nostd-qwen-3b' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
+    trainer.val_before_train=False \
     trainer.save_freq=10 \
     trainer.test_freq=-1 \
     trainer.total_epochs=15 \

@@ -307,12 +307,14 @@ def compute_grpo_outcome_advantage(
                 print(f"Group {idx} has {len(id2score[idx])} responses:")
                 for rew, response in zip(id2score[idx], responses_list[idx]):
                     response_text = tokenizer.decode(response, skip_special_tokens=True)
-                    print(f"Score is {rew}. for  Response: {response_text}")
+       #             print(f"Score is {rew}. for  Response: {response_text}")
            # """
             if len(id2score[idx]) == 1:
                 id2mean[idx] = torch.tensor(0.0)
                 id2std[idx] = torch.tensor(1.0)
             elif len(id2score[idx]) > 1:
+                print("sadasda", torch.tensor(id2score[idx]).size())
+                assert torch.tensor(id2score[idx]).size(0) == 5
                 id2mean[idx] = torch.mean(torch.tensor(id2score[idx]))
                 id2std[idx] = torch.std(torch.tensor([id2score[idx]]))
             else:

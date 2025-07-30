@@ -800,7 +800,7 @@ class SGLangRollout(BaseRollout):
 
         current_turns = 0
         user_turns = 0
-        user_turn_rewards = []
+        format_reward = []
 
         # Create request-level sampling parameters
         request_sampling_params = self.sampling_params.copy()
@@ -936,7 +936,15 @@ class SGLangRollout(BaseRollout):
                         self.processing_class,
                         content,
                     )
-                    print("turnsturns", user_turns, current_turns, self.processing_class.decode(content.squeeze(0).tolist()))
+                    interaction_name = _req.interaction_kwargs.get(
+                        "name", "gsm8k"
+                    )
+                    interaction = self.interaction_map[interaction_name]
+                    _, _, reward, metrics = await interaction.generate_response(
+                        _req.request_id, content, **_req.interaction_kwargs
+                    )
+                    format_reward.append(reward)
+               #     print("turnsturns", user_turns, current_turns, content)
                     assert _req.interaction_kwargs and self.interaction_map
                     if (
                         _req.interaction_kwargs
@@ -949,26 +957,26 @@ class SGLangRollout(BaseRollout):
                         break
             elif _req.state == AsyncRolloutRequestStateEnum.INTERACTING:
                 user_turns += 1
-                messages = _req.messages
+             #   messages = _req.messages
                # messages = [{"role": x.role, "content": x.content} for x in _req.messages]
 
                 # Get interaction by name from interaction_kwargs
-                interaction_name = _req.interaction_kwargs.get(
-                    "name", "gsm8k"
-                )  # Default to gsm8k for backward compatibility
+#                interaction_name = _req.interaction_kwargs.get(
+#                    "name", "gsm8k"
+#                )  # Default to gsm8k for backward compatibility
                 if interaction_name not in self.interaction_map:
                     raise ValueError(
                         f"Interaction '{interaction_name}' not found in interaction_map. Available interactions: "
                         f"{list(self.interaction_map.keys())}"
                     )
 
-                interaction = self.interaction_map[interaction_name]
-                should_terminate_sequence, content, reward, metrics = await interaction.generate_response(
-                    _req.request_id, messages, **_req.interaction_kwargs
-                )
-                user_turn_rewards.append(reward)
+                #interaction = self.interaction_map[interaction_name]
+#                should_terminate_sequence, _, reward, metrics = await interaction.generate_response(
+#                    _req.request_id, content, **_req.interaction_kwargs
+#                )
+                #user_turn_rewards.append(reward)
                 _req.add_user_message(self.processing_class, user_turns)
-                if should_terminate_sequence or user_turns >= len(_req.split_lines) - 1 or len(_req.get_generation_prompt_ids(self.processing_class)) >= self.config.response_length:
+                if user_turns >= len(_req.split_lines) - 1 or len(_req.get_generation_prompt_ids(self.processing_class)) >= self.config.response_length:
                     finish_reason_type = FinishReasonTypeEnum.STOP
                     _req.state = AsyncRolloutRequestStateEnum.COMPLETED
                     break
@@ -995,7 +1003,7 @@ class SGLangRollout(BaseRollout):
             tool_reward_tasks.append(calc_reward_and_release_fn(name, tool))
         tool_reward_scores = await asyncio.gather(*tool_reward_tasks)
         tool_reward_scores = dict(tool_reward_scores)
-        all_rewards = {**tool_reward_scores, **{"user_turn_rewards": user_turn_rewards}}
+        all_rewards = {**tool_reward_scores, **{"format_reward": format_reward}}
         _req.finalize(self.processing_class, all_rewards, finish_reason_type)
 
         return _req
@@ -1096,7 +1104,7 @@ class SGLangRollout(BaseRollout):
         prompt_position_ids, response_position_ids = [], []
         prompt_loss_mask, response_loss_mask = [], []
         messages = []
-        reward_scores = []
+        format_reward = []
         multi_modal_inputs = []
 
         for req in sorted_output_req_list:
@@ -1135,7 +1143,7 @@ class SGLangRollout(BaseRollout):
             prompt_loss_mask.append(req.prompt_loss_mask.to(tgt_device).squeeze(0))
             response_loss_mask.append(req.response_loss_mask.to(tgt_device).squeeze(0))
             messages.append({"messages": req.messages})
-            reward_scores.append(req.reward_scores["user_turn_rewards"])
+            format_reward.append(req.reward_scores["format_reward"])
             multi_modal_inputs.append(req.multi_modal_inputs)
 
         prompt_ids = pad_sequence(
@@ -1224,12 +1232,17 @@ class SGLangRollout(BaseRollout):
         if self._engine is not None and self._tp_rank == 0:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(self._engine.flush_cache())
+        
+
+        # 2. Pad each list to the max_len
+        # The padding value is 0 in this case
+        padded_format_reward = [sublist + [-1] * (self.config.max_code_lines - len(sublist)) for sublist in format_reward]
 
         return DataProto(
             batch=batch,
             non_tensor_batch={
           #      "messages": np.array(messages),
-          #      "reward_scores": np.array(reward_scores),
+                "format_reward": np.array(padded_format_reward),
                 "multi_modal_inputs": np.array(multi_modal_inputs, dtype=object),
             },
         )

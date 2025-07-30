@@ -23,7 +23,7 @@ import os
 import torch
 from torch import nn
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-
+import torch.nn.functional as F
 import verl.utils.torch_functional as verl_F
 from verl import DataProto
 from verl.trainer.ppo import core_algos
@@ -315,7 +315,7 @@ class DataParallelPPOActor(BasePPOActor):
         use_dynamic_bsz = data.meta_info["use_dynamic_bsz"]
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
         select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "response_mask", "response_attention_mask"]
-        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
+        non_tensor_select_keys = ["multi_modal_inputs", "format_reward"] if has_multi_modal_inputs else ["format_reward"]
 
         data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
         #uid = data.non_tensor_batch["uid"]
@@ -342,13 +342,57 @@ class DataParallelPPOActor(BasePPOActor):
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
+                
 
+
+                padded_mask = F.pad(gt_mask, (1, 0), "constant", 0)
+                # A turn starts where the mask changes from 0 to 1
+                turn_starts = (padded_mask[:, 1:] - padded_mask[:, :-1] == 1).float()
+
+                # 2. Create a unique ID for each turn in each batch sample
+                turn_ids = torch.cumsum(turn_starts, dim=-1)
+                masked_turn_ids = (turn_ids * gt_mask).long()
+
+                # 3. Use scatter_add_ for segmented sum to get per-turn sums and counts
+                batch_size = log_probs.shape[0]
+                max_turns = masked_turn_ids.max().item() if masked_turn_ids.numel() > 0 else 0
+                print("dddddd", max_turns)
+                
+                masked_log_probs = log_probs * gt_mask
+                turn_sums = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=log_probs.dtype)
+                turn_counts = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=gt_mask.dtype)
+
+                # scatter_add_ sums values from src into self at indices specified by index
+                turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
+                turn_counts.scatter_add_(1, masked_turn_ids, gt_mask)
+
+                # 4. Calculate the mean log probability for each turn
+                # clamp_min avoids division by zero for empty turns
+                turn_means = turn_sums / turn_counts.clamp_min(1)
+           
+
+                format_reward = model_inputs["format_reward"]
+             #   print("deeeebug", turn_means.size(), turn_means)
+             #   print("format_reward", format_reward.shape, format_reward)
+                format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
+                format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
+
+
+                # 5. Scatter the means back to a sequence-shaped tensor
+                # First, map the mean of a turn to every token in that turn
+                per_token_means = torch.gather(turn_means + format_reward, 1, masked_turn_ids)
+                print('beforrr', per_token_means[0])
+                # Then, create the sparse reward tensor by only keeping values at turn starts
+                reward_scores = per_token_means * turn_starts
+                print("afffyer", reward_scores.size(), reward_scores[0])
+
+                """
                # reward_scores = torch.clamp(log_probs, max=-0.3)
                 reward_scores = (log_probs * gt_mask).sum(dim=-1)   # shape [batch]
 #                reward_scores = (torch.exp(log_probs) * gt_mask).sum(dim=-1)   # shape [batch]
                 count    = gt_mask.sum(dim=-1)        # shape [batch]
                 reward_scores = (reward_scores / count.clamp_min(1)).detach()
-
+                
                 format_reward = torch.zeros_like(reward_scores)
                 response_str = tokenizer.batch_decode(response_ids, skip_special_tokens=True)
                 for i, response in enumerate(response_str):
@@ -367,11 +411,13 @@ class DataParallelPPOActor(BasePPOActor):
                # all_masked = log_probs[0][gt_mask[0].bool()]
 
                 #  reward_scores = (log_prob * gt_mask).sum(dim=-1).detach()  # TODO: need to change this to separated sum
+                """
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)
             if calculate_entropy:
                 entropy_lst.append(entropy)
         reward_scores = torch.concat(reward_lst, dim=0)
+        print("reward_scoresreward_scores", reward_scores.size())
         log_probs = torch.concat(log_probs_lst, dim=0)
         entropys = None
         if calculate_entropy:
