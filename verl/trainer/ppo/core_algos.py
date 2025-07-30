@@ -313,10 +313,9 @@ def compute_grpo_outcome_advantage(
                 id2mean[idx] = torch.tensor(0.0)
                 id2std[idx] = torch.tensor(1.0)
             elif len(id2score[idx]) > 1:
-                print("sadasda", torch.tensor(id2score[idx]).size())
-                assert torch.tensor(id2score[idx]).size(0) == 5
-                id2mean[idx] = torch.mean(torch.tensor(id2score[idx]))
-                id2std[idx] = torch.std(torch.tensor([id2score[idx]]))
+                concat_score = torch.stack(id2score[idx], dim=0)
+                id2mean[idx] = torch.mean(concat_score, dim=0)
+                id2std[idx] = torch.std(concat_score, dim=0)
             else:
                 raise ValueError(f"no score in prompt index: {idx}")
       #  """
@@ -326,7 +325,24 @@ def compute_grpo_outcome_advantage(
             else:
                 reward_scores[i] = reward_scores[i] - id2mean[index[i]]
       #  """
-        reward_scores = reward_scores.unsqueeze(-1) * response_mask
+        print("final", reward_scores[0])
+
+        T_rev = torch.flip(reward_scores, dims=[1])
+        # Create a mask for non-zero values
+        mask = T_rev != 0
+        # Create column indices
+        cols = torch.arange(T_rev.shape[1], device=reward_scores.device)
+        # Where mask is False, index is 0, otherwise it's the column index
+        idx = torch.where(mask, cols, torch.tensor(0, device=reward_scores.device))
+        # Use cumulative max to forward-propagate the last valid index
+        idx_ffill = torch.cummax(idx, dim=1)[0]
+        # Gather the values from the reversed tensor using the filled indices
+        T_rev_filled = torch.gather(T_rev, 1, idx_ffill)
+        # Reverse the result back to the original order
+        reward_scores = torch.flip(T_rev_filled, dims=[1])
+
+        reward_scores = reward_scores * response_mask
+        print("flipped", reward_scores[0])
 
     return reward_scores, reward_scores
 

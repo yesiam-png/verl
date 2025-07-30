@@ -356,7 +356,6 @@ class DataParallelPPOActor(BasePPOActor):
                 # 3. Use scatter_add_ for segmented sum to get per-turn sums and counts
                 batch_size = log_probs.shape[0]
                 max_turns = masked_turn_ids.max().item() if masked_turn_ids.numel() > 0 else 0
-                print("dddddd", max_turns)
                 
                 masked_log_probs = log_probs * gt_mask
                 turn_sums = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=log_probs.dtype)
@@ -381,10 +380,8 @@ class DataParallelPPOActor(BasePPOActor):
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
                 per_token_means = torch.gather(turn_means + format_reward, 1, masked_turn_ids)
-                print('beforrr', per_token_means[0])
                 # Then, create the sparse reward tensor by only keeping values at turn starts
-                reward_scores = per_token_means * turn_starts
-                print("afffyer", reward_scores.size(), reward_scores[0])
+                reward_scores = (per_token_means * turn_starts).detach()
 
                 """
                # reward_scores = torch.clamp(log_probs, max=-0.3)
