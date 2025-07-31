@@ -1236,7 +1236,7 @@ class SGLangRollout(BaseRollout):
 
         # 2. Pad each list to the max_len
         # The padding value is 0 in this case
-        padded_format_reward = [sublist + [-1] * (self.config.max_code_lines - len(sublist)) for sublist in format_reward]
+        padded_format_reward = [sublist + [0.0] * (self.config.max_code_lines - len(sublist)) for sublist in format_reward]
 
         return DataProto(
             batch=batch,

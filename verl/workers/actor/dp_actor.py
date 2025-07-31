@@ -365,10 +365,6 @@ class DataParallelPPOActor(BasePPOActor):
                 turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
                 turn_counts.scatter_add_(1, masked_turn_ids, gt_mask)
 
-                # 4. Calculate the mean log probability for each turn
-                # clamp_min avoids division by zero for empty turns
-                turn_means = turn_sums / turn_counts.clamp_min(1)
-           
 
                 format_reward = model_inputs["format_reward"]
              #   print("deeeebug", turn_means.size(), turn_means)
@@ -376,10 +372,17 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
+                turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
+                
+                window = 4
+                x = turn_means.unsqueeze(1)               # → [B,1,L]
+                x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
+                kernel = torch.ones(1, 1, window, dtype=x.dtype, device=x.device)
+                turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
 
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
-                per_token_means = torch.gather(turn_means + format_reward, 1, masked_turn_ids)
+                per_token_means = torch.gather(turn_means, 1, masked_turn_ids)
                 # Then, create the sparse reward tensor by only keeping values at turn starts
                 reward_scores = (per_token_means * turn_starts).detach()
 
@@ -414,7 +417,6 @@ class DataParallelPPOActor(BasePPOActor):
             if calculate_entropy:
                 entropy_lst.append(entropy)
         reward_scores = torch.concat(reward_lst, dim=0)
-        print("reward_scoresreward_scores", reward_scores.size())
         log_probs = torch.concat(log_probs_lst, dim=0)
         entropys = None
         if calculate_entropy:

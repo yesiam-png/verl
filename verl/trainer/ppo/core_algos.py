@@ -292,23 +292,23 @@ def compute_grpo_outcome_advantage(
     id2mean = {}
     id2std = {}
 
-    responses_list = defaultdict(list)
-    from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+    #responses_list = defaultdict(list)
+    #from transformers import AutoTokenizer
+    #tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
 
     with torch.no_grad():
         bsz = reward_scores.shape[0]
         for i in range(bsz):
             id2score[index[i]].append(reward_scores[i])
-            responses_list[index[i]].append(responses[i])
+     #       responses_list[index[i]].append(responses[i])
         for i, idx in enumerate(id2score):
-          #  """
+            """
             if i <= 2:
                 print(f"Group {idx} has {len(id2score[idx])} responses:")
                 for rew, response in zip(id2score[idx], responses_list[idx]):
                     response_text = tokenizer.decode(response, skip_special_tokens=True)
        #             print(f"Score is {rew}. for  Response: {response_text}")
-           # """
+            """
             if len(id2score[idx]) == 1:
                 id2mean[idx] = torch.tensor(0.0)
                 id2std[idx] = torch.tensor(1.0)
@@ -325,7 +325,6 @@ def compute_grpo_outcome_advantage(
             else:
                 reward_scores[i] = reward_scores[i] - id2mean[index[i]]
       #  """
-        print("final", reward_scores[0])
 
         T_rev = torch.flip(reward_scores, dims=[1])
         # Create a mask for non-zero values
@@ -342,9 +341,7 @@ def compute_grpo_outcome_advantage(
         reward_scores = torch.flip(T_rev_filled, dims=[1])
 
         reward_scores = reward_scores * response_mask
-        print("flipped", reward_scores[0])
-
-    return reward_scores, reward_scores
+    return reward_scores.detach(), reward_scores.detach()
 
 
 @register_adv_est(AdvantageEstimator.GRPO_PASSK)  # or simply: @register_adv_est("grpo_passk")
