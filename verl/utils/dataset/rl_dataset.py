@@ -132,6 +132,7 @@ class RLHFDataset(Dataset):
         for parquet_file in self.data_files:
             # read parquet files and cache
             dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
+            dataframe = dataframe.filter(lambda example: len(self.tokenizer.encode(example[self.prompt_key])) <= self.max_prompt_length, num_proc=self.num_workers)
             dataframes.append(dataframe)
         self.dataframe: datasets.Dataset = datasets.concatenate_datasets(dataframes)
 

@@ -838,28 +838,6 @@ class SGLangRollout(BaseRollout):
             if _req.state == AsyncRolloutRequestStateEnum.PENDING:
                 await self._handle_pending_state(_req)
                 _req.state = AsyncRolloutRequestStateEnum.RUNNING
-            elif _req.state == AsyncRolloutRequestStateEnum.TOOL_CALLING:
-                if _req.messages[-1].tool_calls is not None:
-                    parsed_tool_calls = _req.messages[-1].tool_calls
-                    tool_call_results = await asyncio.gather(
-                        *[
-                            self._tool_map[tool_call.function.name].execute(
-                                _req.request_id,
-                                tool_call.function.arguments,
-                                **_req.tools_kwargs[tool_call.function.name].get("execute_kwargs", {}),
-                            )
-                            for tool_call in parsed_tool_calls
-                        ]
-                    )
-                    _req.add_tool_response_messages(self.processing_class, [resp for resp, _, _ in tool_call_results])
-                    for tool_call, (resp, reward, metrics) in zip(parsed_tool_calls, tool_call_results, strict=True):
-                        _req.update_metrics(metrics, tool_call.function.name)
-                    if len(_req.input_ids) >= self.config.max_model_len:
-                        finish_reason_type = FinishReasonTypeEnum.STOP
-                        break
-                    _req.state = AsyncRolloutRequestStateEnum.RUNNING
-                else:
-                    raise ValueError(f"Unexpected tool calling last message state: {_req.messages[-1]}")
             elif _req.state == AsyncRolloutRequestStateEnum.RUNNING:
                 # Only continue the conversation if the prompt length is not greater than max_model_len - 1,
                 # since SGLang raises an error when max_new_tokens + 1 is greater to max_model_len (the extra
@@ -886,6 +864,7 @@ class SGLangRollout(BaseRollout):
 
                 output = await self._handle_engine_call(_req, request_sampling_params, image_data=image_data)
                 content = output["text"]
+               # content = "dummy content"
                 finish_reason_type = FinishReasonTypeEnum.from_str(output["meta_info"]["finish_reason"]["type"])
                 current_turns += 1
                 #if finish_reason_type == FinishReasonTypeEnum.LENGTH:
@@ -893,68 +872,30 @@ class SGLangRollout(BaseRollout):
                 #    break
                 #else:
 
-
-                if self._function_call_parser and self._function_call_parser.has_tool_call(content):
-                    finish_reason_type = FinishReasonTypeEnum.TOOL_CALL
-                    _req.state = AsyncRolloutRequestStateEnum.TOOL_CALLING
-                    try:
-                        normed_content, tool_calls = self._function_call_parser.parse_non_stream(content)
-                    except JSONDecodeError:
-                        normed_content = content
-                        tool_calls = []
-                    except AttributeError:
-                        normed_content = content
-                        tool_calls = []
-                    parsed_tool_calls = []
-                    for tool_call in tool_calls:
-                        function, has_decode_error = OpenAIFunctionCallSchema.from_openai_function_parsed_schema(
-                            OpenAIFunctionParsedSchema(
-                                name=tool_call.name,
-                                arguments=tool_call.parameters,
-                            )
-                        )
-                        # Drop the tool call if its arguments has decode error
-                        if has_decode_error:
-                            continue
-                        parsed_tool_calls.append(
-                            OpenAIFunctionToolCall(
-                                id=str(tool_call.tool_index),
-                                function=function,
-                            )
-                        )
-                    if len(parsed_tool_calls) > 0:
-                        _req.add_assistant_message(
-                            self.processing_class, normed_content, tool_calls=parsed_tool_calls
-                        )
-                    else:
-                        _req.add_assistant_message(self.processing_class, content)
-                        finish_reason_type = FinishReasonTypeEnum.STOP
-                        _req.state = AsyncRolloutRequestStateEnum.COMPLETED
-                        break
+                _req.add_assistant_message(
+                    self.processing_class,
+                    content,
+                )
+                interaction_name = _req.interaction_kwargs.get(
+                    "name", "gsm8k"
+                )
+                interaction = self.interaction_map[interaction_name]
+                _, _, reward, metrics = await interaction.generate_response(
+                    _req.request_id, content, **_req.interaction_kwargs
+                )
+                format_reward.append(reward)
+            #     print("turnsturns", user_turns, current_turns, content)
+                assert _req.interaction_kwargs and self.interaction_map
+               # break
+                if (
+                    _req.interaction_kwargs
+                    and self.interaction_map
+                #    and user_turns < self.config.multi_turn.max_user_turns
+                #    and current_turns < self.config.multi_turn.max_assistant_turns
+                ):
+                    _req.state = AsyncRolloutRequestStateEnum.INTERACTING
                 else:
-                    _req.add_assistant_message(
-                        self.processing_class,
-                        content,
-                    )
-                    interaction_name = _req.interaction_kwargs.get(
-                        "name", "gsm8k"
-                    )
-                    interaction = self.interaction_map[interaction_name]
-                    _, _, reward, metrics = await interaction.generate_response(
-                        _req.request_id, content, **_req.interaction_kwargs
-                    )
-                    format_reward.append(reward)
-               #     print("turnsturns", user_turns, current_turns, content)
-                    assert _req.interaction_kwargs and self.interaction_map
-                    if (
-                        _req.interaction_kwargs
-                        and self.interaction_map
-                    #    and user_turns < self.config.multi_turn.max_user_turns
-                    #    and current_turns < self.config.multi_turn.max_assistant_turns
-                    ):
-                        _req.state = AsyncRolloutRequestStateEnum.INTERACTING
-                    else:
-                        break
+                    break
             elif _req.state == AsyncRolloutRequestStateEnum.INTERACTING:
                 user_turns += 1
              #   messages = _req.messages
@@ -1018,7 +959,7 @@ class SGLangRollout(BaseRollout):
         self, generation_prompt_ids: list[int], sampling_params: dict, image_data: Optional[list[Any]] = None
     ) -> dict:
 #        max_new_tokens = min(self.config.response_length, self.config.max_model_len - len(generation_prompt_ids) - 1)
-        max_new_tokens = self.config.per_turn_response_length # min(self.config.per_turn_response_length, self.config.response_length - len(generation_prompt_ids) - 1)
+        max_new_tokens = min(self.config.per_turn_response_length, self.config.response_length - len(generation_prompt_ids))
         kwargs = sampling_params.copy()
         kwargs["max_new_tokens"] = max_new_tokens
         kwargs["n"] = 1  # group size is supported in preprocess
