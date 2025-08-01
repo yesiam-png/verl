@@ -864,8 +864,6 @@ class SGLangRollout(BaseRollout):
 
                 output = await self._handle_engine_call(_req, request_sampling_params, image_data=image_data)
                 content = output["text"]
-                print("thelast", content)
-               # content = "dummy content"
                 finish_reason_type = FinishReasonTypeEnum.from_str(output["meta_info"]["finish_reason"]["type"])
                 current_turns += 1
                 #if finish_reason_type == FinishReasonTypeEnum.LENGTH:
@@ -885,9 +883,7 @@ class SGLangRollout(BaseRollout):
                     _req.request_id, content, **_req.interaction_kwargs
                 )
                 format_reward.append(reward)
-            #     print("turnsturns", user_turns, current_turns, content)
                 assert _req.interaction_kwargs and self.interaction_map
-               # break
                 if (
                     _req.interaction_kwargs
                     and self.interaction_map

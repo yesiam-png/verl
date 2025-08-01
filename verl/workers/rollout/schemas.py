@@ -428,12 +428,11 @@ class AsyncRolloutRequest(BaseModel):
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=True)
 
     def _pop_last_assistant_message_ids(self, assistant_length: int, user_length: int) -> None:
-        print("self.last_assistant_len", assistant_length, user_length)
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
-        print("before", tokenizer.decode(self.input_ids[0].tolist()))
+      #  from transformers import AutoTokenizer
+      #  tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+
         self.input_ids = torch.cat((self.input_ids[..., :-(assistant_length+user_length)], self.input_ids[..., -user_length:]), dim=-1)
-        print("afterremoving", tokenizer.decode(self.input_ids[0].tolist()))
+       # aft = tokenizer.decode(self.input_ids[0, -(assistant_length+user_length):-user_length].tolist())
         self.attention_mask = torch.cat((self.attention_mask[..., :-(assistant_length+user_length)], self.attention_mask[..., -user_length:]), dim=-1)
         self.loss_mask = torch.cat((self.loss_mask[..., :-(assistant_length+user_length)], self.loss_mask[..., -user_length:]), dim=-1)
         self.position_ids = torch.cat((self.position_ids[..., :-(assistant_length+user_length)], self.position_ids[..., -user_length:]), dim=-1)
