@@ -90,7 +90,7 @@ if __name__ == "__main__":
             # 3. Append the line and split if it was determined to be code
             current_chunk.append(line)
             if is_this_line_code:
-                result_chunks.append("".join(current_chunk))
+                result_chunks.append("\n".join(current_chunk))
                 current_chunk = []
 
         # Add any trailing lines (e.g., final comments/blank lines)
@@ -121,7 +121,7 @@ if __name__ == "__main__":
                 no_asserts = no_asserts[: last_fence + 1]
             question_raw = "\n".join(no_asserts)
 
-            system_prompt = "Generate either a comment as your thinking process for the next several lines of code, or skip directly to the next line."
+            system_prompt = "Generate either a comment before writing the next several lines of code, or skip directly to the next line."
             question = system_prompt + question_raw
 
             split_lines = split_on_code_line(question)
