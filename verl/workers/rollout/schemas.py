@@ -89,6 +89,8 @@ class AsyncRolloutRequest(BaseModel):
     state: AsyncRolloutRequestStateEnum
     messages: str #list[Message]
     split_lines: list[str]
+    last_assistant_len: int = 0
+    last_user_len: int = 0
     multi_modal_keys: Optional[list[str]] = None
     multi_modal_data: Optional[dict[str, Any]] = None
     multi_modal_inputs: Optional[dict[str, torch.Tensor]] = None
@@ -390,6 +392,7 @@ class AsyncRolloutRequest(BaseModel):
         """
         content_ids = processing_class(text=["\n" + self.split_lines[user_turns]], return_tensors="pt", add_special_tokens=False)
         content_ids = dict(content_ids)["input_ids"]
+        self.last_user_len = len(content_ids[0])
        # decoded_content = processing_class.batch_decode(self.input_ids, skip_special_tokens=False)
        # print("decoded_old", decoded_content, "oldendiofdecoded_content")
        # decoded_content_ids = processing_class.batch_decode(content_ids, skip_special_tokens=False)
@@ -420,7 +423,19 @@ class AsyncRolloutRequest(BaseModel):
         content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)
         #content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)
         content_ids = dict(content_ids)["input_ids"]
+        self._pop_last_assistant_message_ids(self.last_assistant_len, self.last_user_len)
+        self.last_assistant_len = len(content_ids[0])
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=True)
+
+    def _pop_last_assistant_message_ids(self, assistant_length: int, user_length: int) -> None:
+        print("self.last_assistant_len", assistant_length, user_length)
+        from transformers import AutoTokenizer
+        self.input_ids = torch.cat((self.input_ids[..., :-(assistant_length+user_length)], self.input_ids[..., -user_length:]), dim=-1)
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+        print("afterremoving", tokenizer.decode(self.input_ids[0].tolist()))
+        self.attention_mask = torch.cat((self.attention_mask[..., :-(assistant_length+user_length)], self.attention_mask[..., -user_length:]), dim=-1)
+        self.loss_mask = torch.cat((self.loss_mask[..., :-(assistant_length+user_length)], self.loss_mask[..., -user_length:]), dim=-1)
+        self.position_ids = torch.cat((self.position_ids[..., :-(assistant_length+user_length)], self.position_ids[..., -user_length:]), dim=-1)
 
     def update_metrics(self, metrics: Any, tool_id: str) -> None:
         """

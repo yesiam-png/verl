@@ -864,6 +864,7 @@ class SGLangRollout(BaseRollout):
 
                 output = await self._handle_engine_call(_req, request_sampling_params, image_data=image_data)
                 content = output["text"]
+                print("thelast", content)
                # content = "dummy content"
                 finish_reason_type = FinishReasonTypeEnum.from_str(output["meta_info"]["finish_reason"]["type"])
                 current_turns += 1
@@ -959,7 +960,7 @@ class SGLangRollout(BaseRollout):
         self, generation_prompt_ids: list[int], sampling_params: dict, image_data: Optional[list[Any]] = None
     ) -> dict:
 #        max_new_tokens = min(self.config.response_length, self.config.max_model_len - len(generation_prompt_ids) - 1)
-        max_new_tokens = min(self.config.per_turn_response_length, self.config.response_length - len(generation_prompt_ids))
+        max_new_tokens = max(1, min(self.config.per_turn_response_length, self.config.response_length - len(generation_prompt_ids)))
         kwargs = sampling_params.copy()
         kwargs["max_new_tokens"] = max_new_tokens
         kwargs["n"] = 1  # group size is supported in preprocess
@@ -1226,6 +1227,8 @@ class SGLangRollout(BaseRollout):
                 state=AsyncRolloutRequestStateEnum.PENDING,
                 messages=raw_prompt,#.tolist(),
                 split_lines=split_lines[data_idx],
+                last_assistant_len=0,
+                last_user_len=0,
                 multi_modal_data=multi_modal_data,
                 tool_schemas=_tool_schemas,
                 tools_kwargs=_tools_kwargs,

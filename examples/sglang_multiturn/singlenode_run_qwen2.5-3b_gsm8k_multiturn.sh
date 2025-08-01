@@ -13,7 +13,7 @@ python3 -m verl.trainer.main_ppo \
     --config-name='gsm8k_multiturn_grpo' \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=1024 \
-    data.max_prompt_length=2000 \
+    data.max_prompt_length=1000 \
     data.max_response_length=2048 \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
@@ -30,10 +30,10 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=8 \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=32 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=sglang \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
     actor_rollout_ref.rollout.n=5 \
     +actor_rollout_ref.rollout.per_turn_response_length=16 \
     +actor_rollout_ref.rollout.max_code_lines=128 \
