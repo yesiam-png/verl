@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from verl import DataProto
 from verl.utils.import_utils import deprecated
@@ -46,6 +47,38 @@ def reduce_metrics(metrics: dict[str, list[Any]]) -> dict[str, Any]:
 
     return reduce_metrics(metrics)
 
+def extract_first_sequence(token_ids, diffs):
+    """
+    Extracts token IDs corresponding to the first consecutive run of 1s in a mask.
+
+    Args:
+        token_ids (torch.Tensor or np.ndarray): The tensor of token IDs.
+        mask (torch.Tensor or np.ndarray): The binary mask tensor (0s and 1s).
+
+    Returns:
+        torch.Tensor or np.ndarray: The sliced token IDs or an empty tensor if no 1s are found.
+    """
+    # Ensure the mask is integer type for diff
+#    mask = mask.int()
+
+    # Find where sequences of 1s start and end
+    # Prepend and append 0 to handle edge cases where 1s are at the boundaries
+    # Starts are where the diff is 1. Ends are where the diff is -1.
+    starts = (diffs == 1).nonzero(as_tuple=True)[0]
+    ends = (diffs == -1).nonzero(as_tuple=True)[0]
+
+    # If there are no 1s in the mask, return empty
+    if len(starts) == 0:
+        return torch.tensor([], dtype=token_ids.dtype)
+
+    # Get the start of the first sequence and its corresponding end
+    first_start_idx = starts[0]
+    first_end_idx = ends[0]
+
+    second_start_idx = starts[1]
+    second_end_idx = ends[1]
+
+    return token_ids[first_start_idx:first_end_idx], token_ids[second_start_idx:second_end_idx]
 
 def _compute_response_info(batch: DataProto) -> dict[str, Any]:
     """
@@ -62,18 +95,30 @@ def _compute_response_info(batch: DataProto) -> dict[str, Any]:
             - prompt_length: Tensor of prompt lengths for each item in the batch
             - response_length: Tensor of response lengths for each item in the batch
     """
-    response_length = batch.batch["responses"].shape[-1]
+    all_response_length = batch.batch["responses"].shape[-1]
 
-    prompt_mask = batch.batch["attention_mask"][:, :-response_length]
-    response_mask = batch.batch["attention_mask"][:, -response_length:]
+    prompt_mask = batch.batch["attention_mask"][:, :-all_response_length]
+    response_mask = batch.batch["attention_mask"][:, -all_response_length:]
 
     prompt_length = prompt_mask.sum(-1).float()
-    response_length = response_mask.sum(-1).float()  # (batch_size,)
+    response_loss_mask = batch.batch["response_mask"]
+    response_length = response_loss_mask.float().sum(-1)  # (batch_size,)
+    padded_mask = F.pad(response_loss_mask, (1, 1), "constant", 0)#torch.cat([torch.tensor([0]), response_loss_mask, torch.tensor([0])])
+    diffs = padded_mask.diff()
+    num_turns = torch.sum(diffs == 1, dim=-1)
+    try:
+        first_res, second_res = extract_first_sequence(batch.batch["responses"][0], diffs[0])
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+        print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
+        print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
+    except Exception as e:
+        print("error!!", e)
 
     return dict(
         response_mask=response_mask,
         prompt_length=prompt_length,
-        response_length=response_length,
+        response_length=response_length / num_turns,
     )
 
 

@@ -359,19 +359,19 @@ class DataParallelPPOActor(BasePPOActor):
                 masked_log_probs = log_probs * gt_mask
                 turn_sums = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=log_probs.dtype)
                 turn_counts = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=gt_mask.dtype)
-                """
+               # """
                 batch_size, N = masked_turn_ids.shape
                 tid1_list = [] 
                 tid2_list = []
                 for n in range(N):
                     tid = masked_turn_ids[0, n].item()
                     if tid == 1:
-                        tid1_list.append(masked_log_probs[0, n].item())
-                    if tid == 2:
-                        tid2_list.append(masked_log_probs[0, n].item())
+                        tid1_list.append(torch.exp(masked_log_probs[0, n]).item())
+                    if tid == 8:
+                        tid2_list.append(torch.exp(masked_log_probs[0, n]).item())
                 print("tid1: ", tid1_list, "endtid1")
-                print("tid2: ", tid2_list, "endtid2")
-                """
+                print("tid8: ", tid2_list, "endtid8")
+               # """
                 # scatter_add_ sums values from src into self at indices specified by index
                 turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
                 turn_counts.scatter_add_(1, masked_turn_ids, gt_mask)
@@ -384,7 +384,7 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
-                turn_means = turn_sums / turn_counts.clamp_min(1) #+ format_reward
+                turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
                 """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]

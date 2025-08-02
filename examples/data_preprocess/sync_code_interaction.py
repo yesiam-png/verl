@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
         # Add any trailing lines (e.g., final comments/blank lines)
         if current_chunk:
-            result_chunks.append("".join(current_chunk))
+            result_chunks.append("\n".join(current_chunk))
 
         return result_chunks
 
