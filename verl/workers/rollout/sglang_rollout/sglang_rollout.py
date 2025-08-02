@@ -914,7 +914,7 @@ class SGLangRollout(BaseRollout):
 #                )
                 #user_turn_rewards.append(reward)
                 _req.add_user_message(self.processing_class, user_turns)
-                if user_turns >= len(_req.split_lines) - 1 or len(_req.get_generation_prompt_ids(self.processing_class)) >= self.config.response_length:
+                if user_turns >= len(_req.split_lines) - 1 or user_turns >= self.config.max_code_lines - 1 or len(_req.get_generation_prompt_ids(self.processing_class)) >= self.config.response_length:
                     finish_reason_type = FinishReasonTypeEnum.STOP
                     _req.state = AsyncRolloutRequestStateEnum.COMPLETED
                     break

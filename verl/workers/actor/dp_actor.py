@@ -372,7 +372,7 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
-               # turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
+                turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
                 """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
@@ -382,7 +382,7 @@ class DataParallelPPOActor(BasePPOActor):
                 """
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
-                per_token_means = torch.gather(turn_sums, 1, masked_turn_ids)
+                per_token_means = torch.gather(turn_means, 1, masked_turn_ids)
                 # Then, create the sparse reward tensor by only keeping values at turn starts
                 reward_scores = (per_token_means * turn_starts).detach()
               #  print("entire", torch.exp(log_probs)[0], "endentire")
@@ -391,7 +391,7 @@ class DataParallelPPOActor(BasePPOActor):
                # print("gt_mask[0].bool()", gt_mask[0])
                # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
                # print("decode", tokenizer.decode(response_ids[0][gt_mask[0].bool()].tolist()))
-                print("all_masked", all_masked, "endmasked")
+               # print("all_masked", all_masked, "endmasked")
 
 
             log_probs_lst.append(log_probs)
