@@ -315,7 +315,6 @@ class DataProto:
 
         if prefix:
             message = f"{prefix}, " + message
-        print(message)
 
     def check_consistency(self):
         """Check the consistency of the DataProto. Mainly for batch and non_tensor_batch

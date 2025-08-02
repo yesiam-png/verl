@@ -392,18 +392,14 @@ class AsyncRolloutRequest(BaseModel):
         """
         content_ids = processing_class(text=[self.split_lines[user_turns]], return_tensors="pt", add_special_tokens=False)
         content_ids = dict(content_ids)["input_ids"]
-        self.last_user_len = len(content_ids[0])
-       # decoded_content = processing_class.batch_decode(self.input_ids, skip_special_tokens=False)
-       # print("decoded_old", decoded_content, "oldendiofdecoded_content")
-       # decoded_content_ids = processing_class.batch_decode(content_ids, skip_special_tokens=False)
-       # print("decoded_new", decoded_content_ids, "newendiofdecoded_content")
-
+       # self.last_user_len = len(content_ids[0])
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=False)
 
     def add_assistant_message(
         self,
         processing_class: PreTrainedTokenizer | PreTrainedTokenizerFast | ProcessorMixin,
         content: str,
+        user_turns: int,
         tool_calls: Optional[list[OpenAIFunctionToolCall]] = None,
     ) -> None:
         """
@@ -423,19 +419,59 @@ class AsyncRolloutRequest(BaseModel):
         content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)
         #content_ids = processing_class(text=[content], return_tensors="pt", add_special_tokens=False)
         content_ids = dict(content_ids)["input_ids"]
-        self._pop_last_assistant_message_ids(self.last_assistant_len, self.last_user_len)
-        self.last_assistant_len = len(content_ids[0])
+     #   if self.last_assistant_len != 0 and self.last_user_len != 0:
+     #       self._pop_last_assistant_message_ids(processing_class, self.last_assistant_len, self.last_user_len)
+        """
+        if user_turns == 1 or 2:
+            try:
+                from transformers import AutoTokenizer
+                tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+                wehave = tokenizer.decode(self.input_ids[0].tolist())
+                aaa = self.split_lines[0] + "\n" + self.split_lines[1] if user_turns == 1 else self.split_lines[0] + "\n" + self.split_lines[1] + "\n" + self.split_lines[2]
+                assert wehave == aaa
+            except Exception as e:
+                import difflib,re
+                tokenizer_pattern = r'\w+|[^\w\s]|\s'
+                tokens1 = re.findall(tokenizer_pattern, wehave)
+                tokens2 = re.findall(tokenizer_pattern, aaa)
+                diff = difflib.ndiff(tokens1, tokens2)
+                found_difference = False
+                for word in diff:
+                    
+                    # Check the first two characters of the string for the marker
+                    if word.startswith('- ') or word.startswith('+ '):
+                        found_difference = True
+                        marker = word[0:2]
+                        content = word[2:]
+                        print(f"1111  {marker}{repr(content)}")
+                        print("2222", tokens1, tokens2, "endofturn", user_turns)
+                print("found_difference", found_difference)
+                return a
+        """
+       # self.last_assistant_len = len(content_ids[0])
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=True)
 
-    def _pop_last_assistant_message_ids(self, assistant_length: int, user_length: int) -> None:
+    def _pop_last_assistant_message_ids(self, processing_class, assistant_length: int, user_length: int) -> None:
       #  from transformers import AutoTokenizer
       #  tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
-
-        self.input_ids = torch.cat((self.input_ids[..., :-(assistant_length+user_length)], self.input_ids[..., -user_length:]), dim=-1)
+        next_line_ids = processing_class(text=["\n"], return_tensors="pt", add_special_tokens=False)
+        next_line_ids = dict(next_line_ids)["input_ids"]
+     #   assistant_length += len(next_line_ids[0])
+        
+        self.input_ids = torch.cat([self.input_ids[..., :-(assistant_length+user_length)], next_line_ids, self.input_ids[..., -user_length:]], dim=-1)
        # aft = tokenizer.decode(self.input_ids[0, -(assistant_length+user_length):-user_length].tolist())
-        self.attention_mask = torch.cat((self.attention_mask[..., :-(assistant_length+user_length)], self.attention_mask[..., -user_length:]), dim=-1)
-        self.loss_mask = torch.cat((self.loss_mask[..., :-(assistant_length+user_length)], self.loss_mask[..., -user_length:]), dim=-1)
-        self.position_ids = torch.cat((self.position_ids[..., :-(assistant_length+user_length)], self.position_ids[..., -user_length:]), dim=-1)
+        self.attention_mask = torch.cat([self.attention_mask[..., :-(assistant_length+user_length)], torch.ones_like(next_line_ids), self.attention_mask[..., -user_length:]], dim=-1)
+        self.loss_mask = torch.cat([self.loss_mask[..., :-(assistant_length+user_length)], torch.zeros_like(next_line_ids), self.loss_mask[..., -user_length:]], dim=-1)
+        self.position_ids = self.position_ids[..., :-assistant_length]
+        next_line_attention_mask = torch.ones_like(next_line_ids) * int(True)
+        next_line_position_ids = self._get_position_ids(
+            processing_class, next_line_ids, next_line_attention_mask, None
+        )
+        last_pos = self.position_ids[..., -1:]
+        next_line_position_ids = next_line_position_ids + (last_pos + 1)
+        self.position_ids = torch.cat([self.position_ids, next_line_position_ids], dim=-1)
+        diffs = self.position_ids[0][1:] - self.position_ids[0][:-1]
+        assert torch.all(diffs == 1).item()
 
     def update_metrics(self, metrics: Any, tool_id: str) -> None:
         """

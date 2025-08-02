@@ -341,8 +341,8 @@ class DataParallelPPOActor(BasePPOActor):
                 entropy, log_probs = self._forward_micro_batch(
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
-                gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
-                
+                #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
+                gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask) # after_last_mask                
 
 
                 padded_mask = F.pad(gt_mask, (1, 0), "constant", 0)
@@ -372,46 +372,28 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
-                turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
-                
+               # turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
+                """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
                 x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
                 kernel = torch.ones(1, 1, window, dtype=x.dtype, device=x.device)
                 turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
-
+                """
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
-                per_token_means = torch.gather(turn_means, 1, masked_turn_ids)
+                per_token_means = torch.gather(turn_sums, 1, masked_turn_ids)
                 # Then, create the sparse reward tensor by only keeping values at turn starts
                 reward_scores = (per_token_means * turn_starts).detach()
-
-                """
-               # reward_scores = torch.clamp(log_probs, max=-0.3)
-                reward_scores = (log_probs * gt_mask).sum(dim=-1)   # shape [batch]
-#                reward_scores = (torch.exp(log_probs) * gt_mask).sum(dim=-1)   # shape [batch]
-                count    = gt_mask.sum(dim=-1)        # shape [batch]
-                reward_scores = (reward_scores / count.clamp_min(1)).detach()
-                
-                format_reward = torch.zeros_like(reward_scores)
-                response_str = tokenizer.batch_decode(response_ids, skip_special_tokens=True)
-                for i, response in enumerate(response_str):
-                    if response.lstrip().startswith("#") and response.endswith("\n"):
-                        format_reward[i] = 1.0
-                    elif response == "\n":
-                        format_reward[i] = 3.0
-                print("format_reward:", format_reward)
-                print("reward_scores:", reward_scores)                     
-                reward_scores = reward_scores + format_reward
-#                reward_scores = torch.clamp(reward_scores, max=0.3)
-
+              #  print("entire", torch.exp(log_probs)[0], "endentire")
                 all_masked = torch.exp(log_probs)[0][gt_mask[0].bool()]
-                print("all_masked", all_masked)
+               # from transformers import AutoTokenizer
+               # print("gt_mask[0].bool()", gt_mask[0])
+               # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+               # print("decode", tokenizer.decode(response_ids[0][gt_mask[0].bool()].tolist()))
+                print("all_masked", all_masked, "endmasked")
 
-               # all_masked = log_probs[0][gt_mask[0].bool()]
 
-                #  reward_scores = (log_prob * gt_mask).sum(dim=-1).detach()  # TODO: need to change this to separated sum
-                """
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)
             if calculate_entropy:

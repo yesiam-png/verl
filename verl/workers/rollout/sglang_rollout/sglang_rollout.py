@@ -873,7 +873,7 @@ class SGLangRollout(BaseRollout):
 
                 _req.add_assistant_message(
                     self.processing_class,
-                    content,
+                    content, user_turns
                 )
                 interaction_name = _req.interaction_kwargs.get(
                     "name", "gsm8k"
@@ -1074,6 +1074,11 @@ class SGLangRollout(BaseRollout):
                     f"""{req.request_id=} has response_ids length {req.response_ids.shape[-1]} 
                     greater than max_response_len {self.config.response_length},\n{req=}"""
                 )
+#            print("req.response_loss_mask", req.response_loss_mask)
+#            from transformers import AutoTokenizer
+#            tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+#            print("req.response_loss_mask", tokenizer.decode(req.response_ids[0][-8:].tolist()), "endddd")
+           # print("flip", (req.response_loss_mask.flip(-1).cumsum(-1) == 0).flip(-1))
             prompt_attention_mask.append(req.prompt_attention_mask.to(tgt_device).squeeze(0))
             response_attention_mask.append(req.response_attention_mask.to(tgt_device).squeeze(0))
             prompt_position_ids.append(req.prompt_position_ids.to(tgt_device).squeeze(0))
