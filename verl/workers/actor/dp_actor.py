@@ -329,6 +329,7 @@ class DataParallelPPOActor(BasePPOActor):
         log_probs_lst = []
         entropy_lst = []
         reward_lst = []
+        true_means_lst = []
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for micro_batch in micro_batches:
@@ -343,8 +344,6 @@ class DataParallelPPOActor(BasePPOActor):
                 )
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask) # after_last_mask                
-
-
                 padded_mask = F.pad(gt_mask, (1, 0), "constant", 0)
                 # A turn starts where the mask changes from 0 to 1
                 turn_starts = (padded_mask[:, 1:] - padded_mask[:, :-1] == 1).float()
@@ -360,11 +359,24 @@ class DataParallelPPOActor(BasePPOActor):
                 masked_log_probs = log_probs * gt_mask
                 turn_sums = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=log_probs.dtype)
                 turn_counts = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=gt_mask.dtype)
-
+                """
+                batch_size, N = masked_turn_ids.shape
+                tid1_list = [] 
+                tid2_list = []
+                for n in range(N):
+                    tid = masked_turn_ids[0, n].item()
+                    if tid == 1:
+                        tid1_list.append(masked_log_probs[0, n].item())
+                    if tid == 2:
+                        tid2_list.append(masked_log_probs[0, n].item())
+                print("tid1: ", tid1_list, "endtid1")
+                print("tid2: ", tid2_list, "endtid2")
+                """
                 # scatter_add_ sums values from src into self at indices specified by index
                 turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
                 turn_counts.scatter_add_(1, masked_turn_ids, gt_mask)
-
+              #  print("turn_sums", turn_sums[0, :3])
+              #  print("turn_counts", turn_counts[0, :3])
 
                 format_reward = model_inputs["format_reward"]
              #   print("deeeebug", turn_means.size(), turn_means)
@@ -372,7 +384,7 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
-                turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
+                turn_means = turn_sums / turn_counts.clamp_min(1) #+ format_reward
                 """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
@@ -392,12 +404,14 @@ class DataParallelPPOActor(BasePPOActor):
                # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
                # print("decode", tokenizer.decode(response_ids[0][gt_mask[0].bool()].tolist()))
                # print("all_masked", all_masked, "endmasked")
-
+            nonzero_counts = torch.sum(turn_means != 0, dim=-1)
+            true_means_lst.append(torch.sum(turn_means, dim=-1) / nonzero_counts)
 
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)
             if calculate_entropy:
                 entropy_lst.append(entropy)
+        true_means_ = torch.concat(true_means_lst, dim=0)
         reward_scores = torch.concat(reward_lst, dim=0)
         log_probs = torch.concat(log_probs_lst, dim=0)
         entropys = None
@@ -416,7 +430,7 @@ class DataParallelPPOActor(BasePPOActor):
 #            index=uid,
 #            norm_adv_by_std_in_grpo=True,
 #        )
-        return log_probs, entropys, reward_scores#, advantages
+        return log_probs, entropys, reward_scores, true_means_ #, advantages
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):

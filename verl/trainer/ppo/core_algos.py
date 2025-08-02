@@ -341,6 +341,7 @@ def compute_grpo_outcome_advantage(
         reward_scores = torch.flip(T_rev_filled, dims=[1])
 
         reward_scores = reward_scores * response_mask
+        print("reward_scores", reward_scores[0][:30])
     return reward_scores.detach(), reward_scores.detach()
 
 

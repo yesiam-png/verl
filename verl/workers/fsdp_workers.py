@@ -778,9 +778,9 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         with self.ulysses_sharding_manager:
             data = self.ulysses_sharding_manager.preprocess_data(data)
             with adapter_ctx:
-                output, entropys, reward_scores = self.actor.compute_log_prob(data=data, calculate_entropy=True)
+                output, entropys, reward_scores, turn_means = self.actor.compute_log_prob(data=data, calculate_entropy=True)
             output = DataProto.from_dict(
-                tensors={"old_log_probs": output, "entropys": entropys, "reward_scores": reward_scores},
+                tensors={"old_log_probs": output, "entropys": entropys, "reward_scores": reward_scores, "turn_means": turn_means},
                 meta_info={"temperature": self.config.rollout.temperature},
             )
             output = self.ulysses_sharding_manager.postprocess_data(output)
