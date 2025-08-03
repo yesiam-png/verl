@@ -342,6 +342,7 @@ class DataParallelPPOActor(BasePPOActor):
                 entropy, log_probs = self._forward_micro_batch(
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
+                log_probs = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask) # after_last_mask                
                 padded_mask = F.pad(gt_mask, (1, 0), "constant", 0)
