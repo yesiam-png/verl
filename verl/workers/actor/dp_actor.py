@@ -332,7 +332,7 @@ class DataParallelPPOActor(BasePPOActor):
         true_means_lst = []
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
-        for micro_batch in micro_batches:
+        for mini_iter, micro_batch in enumerate(micro_batches):
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
             response_attention_mask = model_inputs["response_attention_mask"]
             response_mask = model_inputs["response_mask"]
@@ -342,9 +342,9 @@ class DataParallelPPOActor(BasePPOActor):
                 entropy, log_probs = self._forward_micro_batch(
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
-                log_probs = torch.exp(log_probs)
+               # log_probs = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
-                gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask) # after_last_mask                
+                gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)               
                 padded_mask = F.pad(gt_mask, (1, 0), "constant", 0)
                 # A turn starts where the mask changes from 0 to 1
                 turn_starts = (padded_mask[:, 1:] - padded_mask[:, :-1] == 1).float()
@@ -364,14 +364,45 @@ class DataParallelPPOActor(BasePPOActor):
                 batch_size, N = masked_turn_ids.shape
                 tid1_list = [] 
                 tid2_list = []
+                #res_0_list = []
+                res_1_list = []
+                res_2_list = []
+                count1 = 0
+                response_length_mine = model_inputs["responses"].size(-1)
                 for n in range(N):
                     tid = masked_turn_ids[0, n].item()
+                  #  if tid == 2:
+                  #      res_0_list.append(response_ids[0, n].item())
                     if tid == 1:
+                    #    if count1 == 0 or count1 == 1 or count1 == 2 or count1 == 3:
+                    #        print("symbolinfirst", tokenizer.decode([response_ids[0, n].item()]), "endfirst")
                         tid1_list.append(torch.exp(masked_log_probs[0, n]).item())
-                    if tid == 8:
+                        res_1_list.append(response_ids[0, n].item())
+                    #    count1 = n + 1
+                    if tid == 2:
+                    #    if count1 == 0 or count1 == 1 or count1 == 2 or count1 == 3:
+                    #        print("symbolinfirst", tokenizer.decode([response_ids[0, n].item()]), "endfirst")
+                        tid1_list.append(torch.exp(masked_log_probs[0, n]).item())
+                        res_1_list.append(response_ids[0, n].item())
+                        count1 = n + 1
+                    if tid == 6:
+                   #     if count2 == 0 :
+                   #         print("symbolinsix", response_ids[0, n].item(), "endsix")
                         tid2_list.append(torch.exp(masked_log_probs[0, n]).item())
-                print("tid1: ", tid1_list, "endtid1")
-                print("tid8: ", tid2_list, "endtid8")
+                        res_2_list.append(response_ids[0, n].item())
+                if mini_iter == 0 or mini_iter == 1:
+                    print("tid1: ", tid1_list, "endtid1")
+                    print("tid6: ", tid2_list, "endtid6")
+                    prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
+                    print("prompt_and_firstturn", tokenizer.decode(prompt_and_firstturn.tolist(), skip_special_tokens=True), "endprompt_and_firstturn")
+            #    print("deeeee", tokenizer.decode(model_inputs["input_ids"][0, -response_length_mine + count1:-response_length_mine + count1+2].tolist(), skip_special_tokens=True), "enddebug")
+
+               # from transformers import AutoTokenizer
+               # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+               # print("explain0", tokenizer.decode(res_0_list), "endexp0")
+             ##   print("explain1", tokenizer.decode(res_1_list), "endexp1")
+             ##   print("explain8", tokenizer.decode(res_2_list), "endexp8")
+
                # """
                 # scatter_add_ sums values from src into self at indices specified by index
                 turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
@@ -385,7 +416,7 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
-                turn_means = turn_sums / turn_counts.clamp_min(1) + format_reward
+                turn_means = turn_sums / turn_counts.clamp_min(1) #+ format_reward
                 """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
@@ -399,7 +430,7 @@ class DataParallelPPOActor(BasePPOActor):
                 # Then, create the sparse reward tensor by only keeping values at turn starts
                 reward_scores = (per_token_means * turn_starts).detach()
               #  print("entire", torch.exp(log_probs)[0], "endentire")
-                all_masked = torch.exp(log_probs)[0][gt_mask[0].bool()]
+              #  all_masked = torch.exp(log_probs)[0][gt_mask[0].bool()]
                # from transformers import AutoTokenizer
                # print("gt_mask[0].bool()", gt_mask[0])
                # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
