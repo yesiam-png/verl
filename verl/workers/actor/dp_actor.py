@@ -406,6 +406,7 @@ class DataParallelPPOActor(BasePPOActor):
                # """
                 # scatter_add_ sums values from src into self at indices specified by index
                 turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
+               # turn_sums = torch.exp(turn_sums)
                 turn_counts.scatter_add_(1, masked_turn_ids, gt_mask)
               #  print("turn_sums", turn_sums[0, :3])
               #  print("turn_counts", turn_counts[0, :3])
