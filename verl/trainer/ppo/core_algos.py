@@ -293,6 +293,7 @@ def compute_grpo_outcome_advantage(
     id2mean = {}
     id2std = {}
     ids2turns = defaultdict(list)
+    id2n = defaultdict(list)
 
     #responses_list = defaultdict(list)
     #from transformers import AutoTokenizer
@@ -327,33 +328,41 @@ def compute_grpo_outcome_advantage(
                 valid_counts = nonzero_counts[nonzero_counts > 0]
            #     if len(valid_counts) == 0:
            #         return torch.empty(concat_score.shape[0], 0)
-                n = valid_counts.min().item()
-                indices = concat_turns.long().argsort(dim=1, descending=True)
+                n = int(valid_counts.min().item())
+              #  print("vali", n, valid_counts)
+                indices = concat_turns.long().argsort(dim=1, descending=True, stable=True)
+              #  print("concat_turns", concat_turns)
+              #  print("indices", indices.size(), indices)
+              #  print("concat_score", concat_score.size(), concat_score)
                 nonzero_concat_score = concat_score.gather(dim=1, index=indices)[:, :n]
 
-                print("nonzero_concat_score", nonzero_concat_score.size(), nonzero_concat_score)
+              #  print("nonzero_concat_score", nonzero_concat_score.size(), nonzero_concat_score[:, :30]). # 5, 1024
+              #  nonzero_concat_score = nonzero_concat_score[:, :n]
+              #  print("nonzero_concat_score_after", nonzero_concat_score.size(), nonzero_concat_score[:, :30]) # 5, 19
 
                 id2mean[idx] = torch.mean(nonzero_concat_score, dim=0)
                 id2std[idx] = torch.std(nonzero_concat_score, dim=0)
+                id2n[idx] = n
             else:
                 raise ValueError(f"no score in prompt index: {idx}")
        # """
-        indices = turn_starts_.long().argsort(dim=1, descending=True)
+        indices = turn_starts_.long().argsort(dim=1, descending=True, stable=True)
+        all_nonzero_concat_score = reward_scores.gather(dim=1, index=indices)
         norm_reward = [] #torch.zeros_like(reward_scores)
         for i in range(bsz):
+            n = id2n[index[i]]
             if norm_adv_by_std_in_grpo:
-                nonzero_concat_score[i] = (nonzero_concat_score[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
+                temp = (all_nonzero_concat_score[i, :n] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
             else:
-                nonzero_concat_score[i] = nonzero_concat_score[i] - id2mean[index[i]]
+                temp = all_nonzero_concat_score[i, :n] - id2mean[index[i]]
 
-            n = nonzero_concat_score[i].shape[-1]
             target_indices = indices[i, :n]
             output = torch.zeros(
                 (1, length), 
-                dtype=nonzero_concat_score[i].dtype, 
-                device=nonzero_concat_score[i].device
+                dtype=all_nonzero_concat_score.dtype, 
+                device=all_nonzero_concat_score.device
             ).squeeze()
-            output.scatter_(dim=-1, index=target_indices, src=nonzero_concat_score[i])
+            output.scatter_(dim=-1, index=target_indices, src=temp)
             norm_reward.append(output)
        # """
         norm_reward = torch.stack(norm_reward, dim=0)
