@@ -960,6 +960,7 @@ class SGLangRollout(BaseRollout):
         kwargs = sampling_params.copy()
         kwargs["max_new_tokens"] = max_new_tokens
         kwargs["n"] = 1  # group size is supported in preprocess
+        kwargs["skip_special_tokens"] = True
       #  kwargs["frequency_penalty"] = 2.0
        # kwargs["stop"] = ["####"]
         output = await self._engine.async_generate(

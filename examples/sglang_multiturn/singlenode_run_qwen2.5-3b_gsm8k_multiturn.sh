@@ -36,14 +36,14 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.name=sglang \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
     actor_rollout_ref.rollout.n=5 \
-    +actor_rollout_ref.rollout.per_turn_response_length=16 \
+    +actor_rollout_ref.rollout.per_turn_response_length=32 \
     +actor_rollout_ref.rollout.max_code_lines=32 \
     actor_rollout_ref.rollout.response_length=1024 \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt' \
-    trainer.experiment_name='logprob-mean-nostd-ref' \
+    trainer.experiment_name='32rs-correct-prob-mean-nostd-ref' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
