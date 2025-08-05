@@ -252,6 +252,7 @@ def compute_grpo_outcome_advantage(
     epsilon: float = 1e-6,
     norm_adv_by_std_in_grpo: bool = True,
     config: Optional[AlgoConfig] = None,
+    turn_starts_: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute advantage for GRPO, operating only on Outcome reward
@@ -291,15 +292,21 @@ def compute_grpo_outcome_advantage(
     id2score = defaultdict(list)
     id2mean = {}
     id2std = {}
+    ids2turns = defaultdict(list)
 
     #responses_list = defaultdict(list)
     #from transformers import AutoTokenizer
     #tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
 
     with torch.no_grad():
+        print("before", reward_scores[0][:50])
+        print("response_mask", response_mask[0][:50])
+
         bsz = reward_scores.shape[0]
+        length = reward_scores.shape[1]
         for i in range(bsz):
             id2score[index[i]].append(reward_scores[i])
+            ids2turns[index[i]].append(turn_starts_[i])
      #       responses_list[index[i]].append(responses[i])
         for i, idx in enumerate(id2score):
             """
@@ -314,20 +321,46 @@ def compute_grpo_outcome_advantage(
                 id2std[idx] = torch.tensor(1.0)
             elif len(id2score[idx]) > 1:
                 concat_score = torch.stack(id2score[idx], dim=0)
-#                print("concat_score", concat_score[:2, :35], concat_score.size())
-                id2mean[idx] = torch.mean(concat_score, dim=0)
-                id2std[idx] = torch.std(concat_score, dim=0)
+                concat_turns = torch.stack(ids2turns[idx], dim=0)
+
+                nonzero_counts = concat_turns.sum(dim=1)
+                valid_counts = nonzero_counts[nonzero_counts > 0]
+           #     if len(valid_counts) == 0:
+           #         return torch.empty(concat_score.shape[0], 0)
+                n = valid_counts.min().item()
+                indices = concat_turns.long().argsort(dim=1, descending=True)
+                nonzero_concat_score = concat_score.gather(dim=1, index=indices)[:, :n]
+
+                print("nonzero_concat_score", nonzero_concat_score.size(), nonzero_concat_score)
+
+                id2mean[idx] = torch.mean(nonzero_concat_score, dim=0)
+                id2std[idx] = torch.std(nonzero_concat_score, dim=0)
             else:
                 raise ValueError(f"no score in prompt index: {idx}")
-      #  """
+       # """
+        indices = turn_starts_.long().argsort(dim=1, descending=True)
+        norm_reward = [] #torch.zeros_like(reward_scores)
         for i in range(bsz):
             if norm_adv_by_std_in_grpo:
-                reward_scores[i] = (reward_scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
+                nonzero_concat_score[i] = (nonzero_concat_score[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
             else:
-                reward_scores[i] = reward_scores[i] - id2mean[index[i]]
-      #  """
+                nonzero_concat_score[i] = nonzero_concat_score[i] - id2mean[index[i]]
 
-        T_rev = torch.flip(reward_scores, dims=[1])
+            n = nonzero_concat_score[i].shape[-1]
+            target_indices = indices[i, :n]
+            output = torch.zeros(
+                (1, length), 
+                dtype=nonzero_concat_score[i].dtype, 
+                device=nonzero_concat_score[i].device
+            ).squeeze()
+            output.scatter_(dim=-1, index=target_indices, src=nonzero_concat_score[i])
+            norm_reward.append(output)
+       # """
+        norm_reward = torch.stack(norm_reward, dim=0)
+        print("stack", len(id2score), torch.stack(id2score[index[0]], dim=0).size(), torch.stack(id2score[index[0]], dim=0)[:, :50])
+        print("mememean", id2mean[index[0]].size(), id2mean[index[0]][:50])
+        print("norm_reward", norm_reward.size(), reward_scores.size(), norm_reward[0][:50])
+        T_rev = torch.flip(norm_reward, dims=[1])
         # Create a mask for non-zero values
         mask = T_rev != 0
         # Create column indices
@@ -339,11 +372,10 @@ def compute_grpo_outcome_advantage(
         # Gather the values from the reversed tensor using the filled indices
         T_rev_filled = torch.gather(T_rev, 1, idx_ffill)
         # Reverse the result back to the original order
-        reward_scores = torch.flip(T_rev_filled, dims=[1])
-
-        reward_scores = reward_scores * response_mask
-     #   print("reward_scores", reward_scores[0][:30])
-    return reward_scores.detach(), reward_scores.detach()
+        norm_reward = torch.flip(T_rev_filled, dims=[1])
+        norm_reward = norm_reward * response_mask
+        print("last", norm_reward[0][:50])
+    return norm_reward.detach(), norm_reward.detach()
 
 
 @register_adv_est(AdvantageEstimator.GRPO_PASSK)  # or simply: @register_adv_est("grpo_passk")
@@ -808,6 +840,7 @@ def compute_policy_loss(
     ppo_kl = verl_F.masked_mean(-negative_approx_kl, response_mask)
 
     pg_losses1 = -advantages * ratio
+
     if cliprange_low is None:
         cliprange_low = cliprange
     if cliprange_high is None:

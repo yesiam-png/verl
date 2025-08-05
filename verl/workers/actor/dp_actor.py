@@ -330,6 +330,7 @@ class DataParallelPPOActor(BasePPOActor):
         entropy_lst = []
         reward_lst = []
         true_means_lst = []
+        turn_starts_lst = []
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for mini_iter, micro_batch in enumerate(micro_batches):
@@ -391,15 +392,18 @@ class DataParallelPPOActor(BasePPOActor):
                    #         print("symbolinsix", response_ids[0, n].item(), "endsix")
                         tid2_list.append((masked_log_probs[0, n]).item())
                         res_2_list.append(response_ids[0, n].item())
+                
                 if (mini_iter == 0 or mini_iter == 1):
+                    """
                     if not calculate_entropy:
                         print("tid1: ", tid1_list, "endtid1")
                         print("tid6: ", tid2_list, "endtid6")
                     else:
                         print("oldtid1: ", tid1_list, "oldendtid1")
                         print("oldtid6: ", tid2_list, "oldendtid6")
-               #     prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
-               #     print("prompt_and_firstturn", tokenizer.decode(prompt_and_firstturn.tolist(), skip_special_tokens=True), "endprompt_and_firstturn")
+                    """
+                    prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
+                 #   print("prompt_and_firstturn", tokenizer.decode(prompt_and_firstturn.tolist(), skip_special_tokens=True), "endprompt_and_firstturn")
             #    print("deeeee", tokenizer.decode(model_inputs["input_ids"][0, -response_length_mine + count1:-response_length_mine + count1+2].tolist(), skip_special_tokens=True), "enddebug")
 
                # from transformers import AutoTokenizer
@@ -435,6 +439,13 @@ class DataParallelPPOActor(BasePPOActor):
                 per_token_means = torch.gather(turn_means, 1, masked_turn_ids)
                 # Then, create the sparse reward tensor by only keeping values at turn starts
                 reward_scores = (per_token_means * turn_starts).detach()
+                """
+                if mini_iter == 0:
+                    print("masked_log_probs", masked_log_probs[0, :50])
+                    print("turn_means", turn_means[0: 50])
+                    print("per_token_means", per_token_means[0, :50])
+                    print("turn_starts", turn_starts[0, :50])
+                """
               #  print("entire", torch.exp(log_probs)[0], "endentire")
               #  all_masked = torch.exp(log_probs)[0][gt_mask[0].bool()]
                # from transformers import AutoTokenizer
@@ -447,11 +458,13 @@ class DataParallelPPOActor(BasePPOActor):
 
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)
+            turn_starts_lst.append(turn_starts)
             if calculate_entropy:
                 entropy_lst.append(entropy)
         true_means_ = torch.concat(true_means_lst, dim=0)
         reward_scores = torch.concat(reward_lst, dim=0)
         log_probs = torch.concat(log_probs_lst, dim=0)
+        turn_starts_ = torch.concat(turn_starts_lst, dim=0)
         entropys = None
         if calculate_entropy:
             entropys = torch.concat(entropy_lst, dim=0)
@@ -459,6 +472,8 @@ class DataParallelPPOActor(BasePPOActor):
         if use_dynamic_bsz:
             log_probs = restore_dynamic_batch(log_probs, batch_idx_list)
             reward_scores = restore_dynamic_batch(reward_scores, batch_idx_list)
+            true_means_ = restore_dynamic_batch(true_means_, batch_idx_list)
+            turn_starts_ = restore_dynamic_batch(turn_starts_, batch_idx_list)
             if calculate_entropy:
                 entropys = restore_dynamic_batch(entropys, batch_idx_list)
         
@@ -468,7 +483,7 @@ class DataParallelPPOActor(BasePPOActor):
 #            index=uid,
 #            norm_adv_by_std_in_grpo=True,
 #        )
-        return log_probs, entropys, reward_scores, true_means_ #, advantages
+        return log_probs, entropys, reward_scores, true_means_, turn_starts_ #, advantages
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):

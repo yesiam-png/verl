@@ -1310,6 +1310,7 @@ class RayPPOTrainer:
                             response_mask=batch.batch["response_mask"],
                             index=batch.non_tensor_batch["uid"],
                             norm_adv_by_std_in_grpo=False,
+                            turn_starts_=batch.batch["turn_starts_"]
                         )
                         batch.batch["advantages"] = advantages
 
