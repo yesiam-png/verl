@@ -351,11 +351,13 @@ def compute_grpo_outcome_advantage(
         norm_reward = [] #torch.zeros_like(reward_scores)
         for i in range(bsz):
             n = id2n[index[i]]
+            """
             if norm_adv_by_std_in_grpo:
                 temp = (all_nonzero_concat_score[i, :n] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
             else:
                 temp = all_nonzero_concat_score[i, :n] - id2mean[index[i]]
-
+            """
+            temp = all_nonzero_concat_score[i, :n]
             target_indices = indices[i, :n]
             output = torch.zeros(
                 (1, length), 

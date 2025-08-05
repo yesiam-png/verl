@@ -393,15 +393,15 @@ class DataParallelPPOActor(BasePPOActor):
                         res_2_list.append(response_ids[0, n].item())
                 
                 if (mini_iter == 0 or mini_iter == 1):
-                    """
+                  #  """
                     if not calculate_entropy:
                         print("tid1: ", tid1_list, "endtid1")
                         print("tid6: ", tid2_list, "endtid6")
                     else:
                         print("oldtid1: ", tid1_list, "oldendtid1")
                         print("oldtid6: ", tid2_list, "oldendtid6")
-                    """
-                    prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
+                  #  """
+                  #  prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
                  #   print("prompt_and_firstturn", tokenizer.decode(prompt_and_firstturn.tolist(), skip_special_tokens=True), "endprompt_and_firstturn")
             #    print("deeeee", tokenizer.decode(model_inputs["input_ids"][0, -response_length_mine + count1:-response_length_mine + count1+2].tolist(), skip_special_tokens=True), "enddebug")
 
