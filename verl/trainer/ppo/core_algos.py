@@ -300,8 +300,8 @@ def compute_grpo_outcome_advantage(
     #tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
 
     with torch.no_grad():
-        print("before", reward_scores[0][:50])
-        print("response_mask", response_mask[0][:50])
+       # print("before", reward_scores[0][:50])
+       # print("response_mask", response_mask[0][:50])
 
         bsz = reward_scores.shape[0]
         length = reward_scores.shape[1]
@@ -366,9 +366,9 @@ def compute_grpo_outcome_advantage(
             norm_reward.append(output)
        # """
         norm_reward = torch.stack(norm_reward, dim=0)
-        print("stack", len(id2score), torch.stack(id2score[index[0]], dim=0).size(), torch.stack(id2score[index[0]], dim=0)[:, :50])
-        print("mememean", id2mean[index[0]].size(), id2mean[index[0]][:50])
-        print("norm_reward", norm_reward.size(), reward_scores.size(), norm_reward[0][:50])
+      #  print("stack", len(id2score), torch.stack(id2score[index[0]], dim=0).size(), torch.stack(id2score[index[0]], dim=0)[:, :50])
+      #  print("mememean", id2mean[index[0]].size(), id2mean[index[0]][:50])
+      #  print("norm_reward", norm_reward.size(), reward_scores.size(), norm_reward[0][:50])
         T_rev = torch.flip(norm_reward, dims=[1])
         # Create a mask for non-zero values
         mask = T_rev != 0
@@ -383,7 +383,7 @@ def compute_grpo_outcome_advantage(
         # Reverse the result back to the original order
         norm_reward = torch.flip(T_rev_filled, dims=[1])
         norm_reward = norm_reward * response_mask
-        print("last", norm_reward[0][:50])
+      #  print("last", norm_reward[0][:50])
     return norm_reward.detach(), norm_reward.detach()
 
 
