@@ -343,8 +343,7 @@ class DataParallelPPOActor(BasePPOActor):
                 entropy, log_probs = self._forward_micro_batch(
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
-              #  log_probs = torch.exp(log_probs)
-              #  prob = torch.exp(log_probs)
+                prob = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)               
                 padded_mask = F.pad(gt_mask, (1, 0), "constant", 0)
@@ -356,10 +355,10 @@ class DataParallelPPOActor(BasePPOActor):
                 masked_turn_ids = (turn_ids * gt_mask).long()
 
                 # 3. Use scatter_add_ for segmented sum to get per-turn sums and counts
-                batch_size = log_probs.shape[0]
+                batch_size = prob.shape[0]
                 max_turns = masked_turn_ids.max().item() if masked_turn_ids.numel() > 0 else 0
                 
-                masked_log_probs = log_probs * gt_mask
+                masked_log_probs = prob * gt_mask
                 turn_sums = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=log_probs.dtype)
                 turn_counts = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=gt_mask.dtype)
                # """

@@ -300,8 +300,8 @@ def compute_grpo_outcome_advantage(
     #tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
 
     with torch.no_grad():
-       # print("before", reward_scores[0][:50])
-       # print("response_mask", response_mask[0][:50])
+      #  print("before", reward_scores[0][:50])
+      #  print("response_mask", response_mask[0][:50])
 
         bsz = reward_scores.shape[0]
         length = reward_scores.shape[1]
