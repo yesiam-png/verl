@@ -379,12 +379,6 @@ class DataParallelPPOActor(BasePPOActor):
                     #        print("symbolinfirst", tokenizer.decode([response_ids[0, n].item()]), "endfirst")
                         tid1_list.append((masked_log_probs[0, n]).item())
                         res_1_list.append(response_ids[0, n].item())
-                    #    count1 = n + 1
-                    if tid == 2:
-                    #    if count1 == 0 or count1 == 1 or count1 == 2 or count1 == 3:
-                    #        print("symbolinfirst", tokenizer.decode([response_ids[0, n].item()]), "endfirst")
-                        tid1_list.append((masked_log_probs[0, n]).item())
-                        res_1_list.append(response_ids[0, n].item())
                         count1 = n + 1
                     if tid == 6:
                    #     if count2 == 0 :
@@ -425,7 +419,8 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
-                turn_means = turn_sums / turn_counts.clamp_min(1) #+ format_reward
+                turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
+                turn_means = turn_means_noformat + format_reward
                 """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
@@ -452,8 +447,8 @@ class DataParallelPPOActor(BasePPOActor):
                # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
                # print("decode", tokenizer.decode(response_ids[0][gt_mask[0].bool()].tolist()))
                # print("all_masked", all_masked, "endmasked")
-            nonzero_counts = torch.sum(turn_means != 0, dim=-1)
-            true_means_lst.append(torch.sum(turn_means, dim=-1) / nonzero_counts)
+            nonzero_counts = torch.sum(turn_means_noformat != 0, dim=-1)
+            true_means_lst.append(torch.sum(turn_means_noformat, dim=-1) / nonzero_counts)
 
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)

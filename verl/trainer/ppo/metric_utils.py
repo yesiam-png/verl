@@ -165,6 +165,12 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
     prompt_length = response_info["prompt_length"]
     response_length = response_info["response_length"]
 
+    format_reward = batch.non_tensor_batch["format_reward"]
+    max_turns = sequence_reward.size(-1)
+    format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(sequence_reward.device)
+    nonzero_counts = torch.sum(format_reward != 0, dim=-1)
+    format_reward = torch.sum(format_reward, dim=-1) / (nonzero_counts.clamp_min(1))
+
     valid_adv = torch.masked_select(advantages, response_mask)
 #    valid_returns = torch.masked_select(returns, response_mask)
 
@@ -187,6 +193,10 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
         "critic/advantages/mean": torch.mean(valid_adv).detach().item(),
         "critic/advantages/max": torch.max(valid_adv).detach().item(),
         "critic/advantages/min": torch.min(valid_adv).detach().item(),
+
+        "critic/format_reward/mean": torch.mean(format_reward).detach().item(),
+        "critic/format_reward/max": torch.max(format_reward).detach().item(),
+        "critic/format_reward/min": torch.min(format_reward).detach().item(),
         # returns
       #  "critic/returns/mean": torch.mean(valid_returns).detach().item(),
       #  "critic/returns/max": torch.max(valid_returns).detach().item(),
