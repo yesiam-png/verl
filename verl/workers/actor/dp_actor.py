@@ -314,8 +314,8 @@ class DataParallelPPOActor(BasePPOActor):
         temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
         use_dynamic_bsz = data.meta_info["use_dynamic_bsz"]
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
-        select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "response_mask", "response_attention_mask"]
-        non_tensor_select_keys = ["multi_modal_inputs", "format_reward"] if has_multi_modal_inputs else ["format_reward"]
+        select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "response_mask", "response_attention_mask", "format_reward", "num_turns"]
+        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
 
         data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
         #uid = data.non_tensor_batch["uid"]
@@ -416,11 +416,12 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = model_inputs["format_reward"]
              #   print("deeeebug", turn_means.size(), turn_means)
              #   print("format_reward", format_reward.shape, format_reward)
-                format_reward = torch.from_numpy(format_reward[:, :max_turns]).to(turn_starts.device)
+                format_reward = format_reward[:, :max_turns].to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
                 turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
                 turn_means = turn_means_noformat + format_reward
+
                 """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
@@ -447,8 +448,10 @@ class DataParallelPPOActor(BasePPOActor):
                # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
                # print("decode", tokenizer.decode(response_ids[0][gt_mask[0].bool()].tolist()))
                # print("all_masked", all_masked, "endmasked")
-            nonzero_counts = torch.sum(turn_means_noformat != 0, dim=-1)
-            true_means_lst.append(torch.sum(turn_means_noformat, dim=-1) / nonzero_counts)
+          #  nonzero_counts = torch.sum(turn_means_noformat != 0, dim=-1)
+            num_turns = model_inputs["num_turns"]
+          #  assert torch.equal(nonzero_counts, num_turns)
+            true_means_lst.append(torch.sum(turn_means_noformat, dim=-1) / num_turns)# nonzero_counts)
 
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)

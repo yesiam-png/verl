@@ -120,6 +120,7 @@ class AsyncRolloutRequest(BaseModel):
     generation_prompt_ids: Optional[torch.Tensor] = None
     base_conv_wo_gen_prompt_end_pos: Optional[int] = None #int
     base_conv_with_gen_prompt_end_pos: Optional[int] = None #int
+    num_turns: Optional[int] = None #int
 
     @model_validator(mode="before")
     @classmethod

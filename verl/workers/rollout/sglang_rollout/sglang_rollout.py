@@ -834,7 +834,7 @@ class SGLangRollout(BaseRollout):
         # Update with any additional kwargs
         request_sampling_params.update(kwargs)
 
-        while current_turns < self.config.multi_turn.max_assistant_turns:
+        while True: #current_turns < self.config.multi_turn.max_assistant_turns:
             if _req.state == AsyncRolloutRequestStateEnum.PENDING:
                 await self._handle_pending_state(_req)
                 _req.state = AsyncRolloutRequestStateEnum.RUNNING
@@ -943,6 +943,7 @@ class SGLangRollout(BaseRollout):
         tool_reward_scores = dict(tool_reward_scores)
         all_rewards = {**tool_reward_scores, **{"format_reward": format_reward}}
         _req.finalize(self.processing_class, all_rewards, finish_reason_type)
+        _req.num_turns = current_turns
 
         return _req
 
@@ -1045,6 +1046,7 @@ class SGLangRollout(BaseRollout):
         messages = []
         format_reward = []
         multi_modal_inputs = []
+        num_turns = []
 
         for req in sorted_output_req_list:
             assert req.state == AsyncRolloutRequestStateEnum.COMPLETED, f"Request {req.request_id} is not completed"
@@ -1089,6 +1091,7 @@ class SGLangRollout(BaseRollout):
             messages.append({"messages": req.messages})
             format_reward.append(req.reward_scores["format_reward"])
             multi_modal_inputs.append(req.multi_modal_inputs)
+            num_turns.append(req.num_turns)
 
         prompt_ids = pad_sequence(
             prompt_ids,
@@ -1158,6 +1161,8 @@ class SGLangRollout(BaseRollout):
         attention_mask = torch.cat((prompt_attention_mask, response_attention_mask), dim=-1)
         position_ids = torch.cat((prompt_position_ids, response_position_ids), dim=-1)
 
+        padded_format_reward = [sublist + [0.0] * (self.config.max_code_lines - len(sublist)) for sublist in format_reward]
+
         # Construct the batch data
         batch = TensorDict(
             {
@@ -1168,6 +1173,8 @@ class SGLangRollout(BaseRollout):
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
                 "response_attention_mask": response_attention_mask,
+                "format_reward": torch.tensor(padded_format_reward),
+                "num_turns": torch.tensor(num_turns)
             },
             batch_size=len(sorted_output_req_list),
         )
@@ -1176,17 +1183,12 @@ class SGLangRollout(BaseRollout):
         if self._engine is not None and self._tp_rank == 0:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(self._engine.flush_cache())
-        
-
-        # 2. Pad each list to the max_len
-        # The padding value is 0 in this case
-        padded_format_reward = [sublist + [0.0] * (self.config.max_code_lines - len(sublist)) for sublist in format_reward]
 
         return DataProto(
             batch=batch,
             non_tensor_batch={
           #      "messages": np.array(messages),
-                "format_reward": np.array(padded_format_reward),
+                #"format_reward": np.array(padded_format_reward),
                 "multi_modal_inputs": np.array(multi_modal_inputs, dtype=object),
             },
         )
