@@ -81,7 +81,7 @@ class Gsm8kInteraction(BaseInteraction):
        # elif content == "\n":
        #     reward = 0.5 
         else:
-            reward = 0.001
+            reward = 0.0
         should_terminate_sequence = False
 #        reward = 1.0
         return should_terminate_sequence, "", reward, {}
