@@ -43,7 +43,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt' \
-    trainer.experiment_name='rerun-noentropy-prob-nomean-nostd-formatnew-ref' \
+    trainer.experiment_name='noentropy-prob-mean-nostd-format1-ref' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
