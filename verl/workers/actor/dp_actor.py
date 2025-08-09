@@ -267,16 +267,17 @@ class DataParallelPPOActor(BasePPOActor):
 
                 # Positions where we transition from 0 to 1 (start of response turns)
                 turn_start_positions = (response_mask == 1) & (prev_mask == 0)  # (bsz, seqlen)
-
+                """
                 # Get the timesteps that predict these first tokens (shift left by 1)
                 # Since logits at position i predict token at position i+1
                 predict_positions = torch.cat([
                     turn_start_positions[:, 1:],
                     torch.zeros(batch_size, 1, device=turn_start_positions.device, dtype=torch.bool)
                 ], dim=1)  # (bsz, seqlen)
+                """
 
                 # Extract logits where predict_positions is True, maintaining batch structure
-                first_step_logits = full_logits[predict_positions]  # (total_first_tokens, vocab)
+                first_step_logits = full_logits[turn_start_positions]  # (total_first_tokens, vocab)
 
                 p_first_is_newline_flat = torch.exp(
                     F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
@@ -284,7 +285,7 @@ class DataParallelPPOActor(BasePPOActor):
 
                 # Reshape to (bsz, max_turns) format
                 # Count number of turns per batch item
-                turns_per_batch = predict_positions.sum(dim=1)  # (bsz,)
+                turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
                 max_turns = turns_per_batch.max().item()
 
                 # Initialize output tensor
@@ -395,13 +396,12 @@ class DataParallelPPOActor(BasePPOActor):
         reward_lst = []
         true_means_lst = []
         turn_starts_lst = []
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+       # from transformers import AutoTokenizer
+       # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for mini_iter, micro_batch in enumerate(micro_batches):
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
             response_attention_mask = model_inputs["response_attention_mask"]
             response_mask = model_inputs["response_mask"]
-            
             response_ids = model_inputs["responses"]
             with torch.no_grad():
                 entropy, log_probs, p_first_is_newline = self._forward_micro_batch(
@@ -455,9 +455,9 @@ class DataParallelPPOActor(BasePPOActor):
                     if not calculate_entropy:
                         print("tid1: ", tid1_list, "endtid1")
                         print("tid6: ", tid2_list, "endtid6")
-                    else:
-                        print("oldtid1: ", tid1_list, "oldendtid1")
-                        print("oldtid6: ", tid2_list, "oldendtid6")
+                #    else:
+                #        print("oldtid1: ", tid1_list, "oldendtid1")
+                #        print("oldtid6: ", tid2_list, "oldendtid6")
                   #  """
                   #  prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
                  #   print("prompt_and_firstturn", tokenizer.decode(prompt_and_firstturn.tolist(), skip_special_tokens=True), "endprompt_and_firstturn")
@@ -482,11 +482,13 @@ class DataParallelPPOActor(BasePPOActor):
              #   print("format_reward", format_reward.shape, format_reward)
                 format_reward = format_reward[:, :max_turns].to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
+                p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0)
 
                 turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
-                print("p_first_is_newline", p_first_is_newline[0], p_first_is_newline.size())
-                print("turn_means_noformat", turn_means_noformat[0], turn_means_noformat.size())
-                turn_means = turn_means_noformat + format_reward + p_first_is_newline
+             #   print("p_first_is_newline", p_first_is_newline[0], p_first_is_newline.size())
+             #   print("sususm", torch.sum(p_first_is_newline!=0, dim=-1))
+             #   print("turn_means_noformat", torch.sum(turn_means_noformat !=0, dim=-1), turn_means_noformat.size())
+                turn_means = turn_means_noformat + format_reward + p_first_is_newline * 0.5
 
                 """
                 window = 4

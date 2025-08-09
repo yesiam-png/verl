@@ -194,7 +194,7 @@ class RLHFDataset(Dataset):
         return len(self.dataframe)
 
     def _build_messages(self, example: dict):
-        messages: list = example.pop(self.prompt_key)
+        messages: list = example["split_lines"][0] #example.pop(self.prompt_key)
 
         if self.image_key in example or self.video_key in example:
             for message in messages:
