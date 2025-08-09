@@ -79,7 +79,7 @@ class DataParallelPPOActor(BasePPOActor):
         self.device_name = get_device_name()
 
     def _forward_micro_batch(
-        self, micro_batch, temperature, calculate_entropy=False
+        self, micro_batch, temperature, calculate_entropy=False, calculate_format=False
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Returns:
@@ -237,6 +237,69 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy = full_entropy.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
                 log_probs = full_log_probs.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
 
+            
+            if calculate_format:
+                from transformers import AutoTokenizer
+                tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+                ids = tokenizer.encode("\n", add_special_tokens=False)
+                assert len(ids) == 1, r"'\\n' isn't a single token in this tokenizer"
+                newline_id = ids[0]
+
+                # 1) (optional) if using ulysses sp, gather/unpad like you do for log_probs
+                if self.use_ulysses_sp:
+                    logits_rmpad = gather_outputs_and_unpad(
+                        logits_rmpad, gather_dim=0, unpad_dim=0, padding_size=pad_size
+                    )
+
+                # 2) pad back to (bsz, seqlen, vocab)
+                full_logits = pad_input(
+                    hidden_states=logits_rmpad,  # (total_nnz, vocab)
+                    indices=indices,
+                    batch=batch_size,
+                    seqlen=seqlen,
+                )[:, -response_length - 1 : -1, :]  # -> (bsz, seqlen, vocab)
+
+                response_mask = micro_batch["response_mask"]  # (bsz, seqlen)
+                prev_mask = torch.cat([
+                    torch.zeros(batch_size, 1, device=response_mask.device, dtype=response_mask.dtype),
+                    response_mask[:, :-1]
+                ], dim=1)  # (bsz, seqlen)
+
+                # Positions where we transition from 0 to 1 (start of response turns)
+                turn_start_positions = (response_mask == 1) & (prev_mask == 0)  # (bsz, seqlen)
+
+                # Get the timesteps that predict these first tokens (shift left by 1)
+                # Since logits at position i predict token at position i+1
+                predict_positions = torch.cat([
+                    turn_start_positions[:, 1:],
+                    torch.zeros(batch_size, 1, device=turn_start_positions.device, dtype=torch.bool)
+                ], dim=1)  # (bsz, seqlen)
+
+                # Extract logits where predict_positions is True, maintaining batch structure
+                first_step_logits = full_logits[predict_positions]  # (total_first_tokens, vocab)
+
+                p_first_is_newline_flat = torch.exp(
+                    F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
+                )  # (total_first_tokens,)
+
+                # Reshape to (bsz, max_turns) format
+                # Count number of turns per batch item
+                turns_per_batch = predict_positions.sum(dim=1)  # (bsz,)
+                max_turns = turns_per_batch.max().item()
+
+                # Initialize output tensor
+                p_first_is_newline = torch.zeros(batch_size, max_turns, device=full_logits.device)  # (bsz, max_turns)
+
+                # Fill in the probabilities for each batch item
+                flat_idx = 0
+                for batch_idx in range(batch_size):
+                    num_turns = turns_per_batch[batch_idx].item()
+                    assert num_turns > 0
+                    if num_turns > 0:
+                        p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
+                        flat_idx += num_turns
+
+            
             else:  # not using rmpad and no ulysses sp
                 extra_args = {}
                 if self.use_fused_kernels:
@@ -251,7 +314,6 @@ class DataParallelPPOActor(BasePPOActor):
                     use_cache=False,
                     **extra_args,
                 )  # prevent model thinks we are generating
-
                 if self.use_fused_kernels:
                     log_probs = output.log_probs[:, -response_length - 1 : -1]
                     entropy = output.entropy[:, -response_length - 1 : -1]  # (bsz, response_length)
@@ -267,8 +329,10 @@ class DataParallelPPOActor(BasePPOActor):
                             entropy = verl_F.entropy_from_logits(logits)  # (bsz, response_length)
                         else:
                             entropy = torch.utils.checkpoint.checkpoint(verl_F.entropy_from_logits, logits)
-
-            return entropy, log_probs
+            if calculate_format:
+                return entropy, log_probs, p_first_is_newline
+            else:
+                return entropy, log_probs
 
     def _optimizer_step(self):
         assert self.config.grad_clip is not None
@@ -340,8 +404,8 @@ class DataParallelPPOActor(BasePPOActor):
             
             response_ids = model_inputs["responses"]
             with torch.no_grad():
-                entropy, log_probs = self._forward_micro_batch(
-                    model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
+                entropy, log_probs, p_first_is_newline = self._forward_micro_batch(
+                    model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
                 )
                 prob = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
@@ -420,7 +484,9 @@ class DataParallelPPOActor(BasePPOActor):
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
 
                 turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
-                turn_means = turn_means_noformat + format_reward
+                print("p_first_is_newline", p_first_is_newline[0], p_first_is_newline.size())
+                print("turn_means_noformat", turn_means_noformat[0], turn_means_noformat.size())
+                turn_means = turn_means_noformat + format_reward + p_first_is_newline
 
                 """
                 window = 4

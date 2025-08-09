@@ -132,14 +132,15 @@ class RLHFDataset(Dataset):
         for parquet_file in self.data_files:
             # read parquet files and cache
             dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
-            dataframe = dataframe.filter(lambda example: len(self.tokenizer.encode(example[self.prompt_key])) <= self.max_prompt_length, num_proc=self.num_workers)
+#            dataframe = dataframe.filter(lambda example: len(self.tokenizer.encode(example[self.prompt_key])) <= self.max_prompt_length, num_proc=self.num_workers)
+            dataframe = dataframe.filter(lambda example: len(self.tokenizer.encode(example["split_lines"][0])) <= self.max_prompt_length, num_proc=self.num_workers)
             dataframes.append(dataframe)
         self.dataframe: datasets.Dataset = datasets.concatenate_datasets(dataframes)
 
         print(f"dataset len: {len(self.dataframe)}")
 
     #    self.dataframe = self.maybe_filter_out_long_prompts(self.dataframe)
-
+    """
     def maybe_filter_out_long_prompts(self, dataframe: datasets.Dataset = None):
         # filter out too long prompts
         if self.filter_overlong_prompts:
@@ -164,10 +165,10 @@ class RLHFDataset(Dataset):
 
             else:
                 def doc2len(doc) -> int:
-                    try:
-                        return len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
-                    except Exception as e:
-                        return len(doc[prompt_key])
+                  #  try:
+                  #      return len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
+                  #  except Exception as e:
+                    return len(doc[prompt_key])
            #     def doc2len(doc) -> int:
            #         return len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
 
@@ -179,7 +180,7 @@ class RLHFDataset(Dataset):
 
             print(f"filter dataset len: {len(dataframe)}")
         return dataframe
-
+    """
     def resume_dataset_state(self):
         self.serialize_dataset = not hasattr(self, "original_data_files")
         # resume dataframe if not it's serialized in data.pt
@@ -224,7 +225,7 @@ class RLHFDataset(Dataset):
         if self.processor is not None:
             from verl.utils.dataset.vision_utils import process_image, process_video
 
-            raw_prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            raw_prompt = messages# self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
             multi_modal_data = {}
 
             images = None
@@ -263,10 +264,10 @@ class RLHFDataset(Dataset):
                 row_dict["multi_modal_inputs"].pop("second_per_grid_ts", None)
 
         else:
-            try:
-                raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
-            except Exception as e:
-                raw_prompt = messages
+#            try:
+#                raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+#            except Exception as e:
+            raw_prompt = messages
 
            # raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
             model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=False)
