@@ -261,7 +261,7 @@ class DataParallelPPOActor(BasePPOActor):
 
                 response_mask = micro_batch["response_mask"]  # (bsz, seqlen)
                 prev_mask = torch.cat([
-                    torch.zeros(batch_size, 1, device=response_mask.device, dtype=response_mask.dtype),
+                    torch.zeros(batch_size, 1, device=input_ids.device, dtype=input_ids.dtype),
                     response_mask[:, :-1]
                 ], dim=1)  # (bsz, seqlen)
 
@@ -289,7 +289,7 @@ class DataParallelPPOActor(BasePPOActor):
                 max_turns = turns_per_batch.max().item()
 
                 # Initialize output tensor
-                p_first_is_newline = torch.zeros(batch_size, max_turns, device=full_logits.device)  # (bsz, max_turns)
+                p_first_is_newline = torch.zeros(batch_size, max_turns, device=input_ids.device, dtype=input_ids.dtype)  # (bsz, max_turns)
 
                 # Fill in the probabilities for each batch item
                 flat_idx = 0
@@ -331,7 +331,7 @@ class DataParallelPPOActor(BasePPOActor):
                         else:
                             entropy = torch.utils.checkpoint.checkpoint(verl_F.entropy_from_logits, logits)
             if calculate_format:
-                return entropy, log_probs, p_first_is_newline
+                return entropy, log_probs, p_first_is_newline.detach()
             else:
                 return entropy, log_probs
 
@@ -404,8 +404,8 @@ class DataParallelPPOActor(BasePPOActor):
             response_mask = model_inputs["response_mask"]
             response_ids = model_inputs["responses"]
             with torch.no_grad():
-                entropy, log_probs, p_first_is_newline = self._forward_micro_batch(
-                    model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
+                entropy, log_probs = self._forward_micro_batch(  # p_first_is_newline
+                    model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
                 )
                 prob = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
@@ -482,13 +482,15 @@ class DataParallelPPOActor(BasePPOActor):
              #   print("format_reward", format_reward.shape, format_reward)
                 format_reward = format_reward[:, :max_turns].to(turn_starts.device)
                 format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
-                p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0)
 
                 turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
              #   print("p_first_is_newline", p_first_is_newline[0], p_first_is_newline.size())
              #   print("sususm", torch.sum(p_first_is_newline!=0, dim=-1))
              #   print("turn_means_noformat", torch.sum(turn_means_noformat !=0, dim=-1), turn_means_noformat.size())
-                turn_means = turn_means_noformat + format_reward + p_first_is_newline * 0.5
+              #  p_first_is_newline = p_first_is_newline * 0.5
+            ###    p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0).to(device=format_reward.device, dtype=format_reward.dtype)
+
+                turn_means = turn_means_noformat + format_reward #+ p_first_is_newline
 
                 """
                 window = 4
