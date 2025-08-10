@@ -778,7 +778,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         with self.ulysses_sharding_manager:
             data = self.ulysses_sharding_manager.preprocess_data(data)
             with adapter_ctx:
-                output, entropys, _, _, _ = self.actor.compute_log_prob(data=data, calculate_entropy=True)
+                output, entropys, _, _, _, _ = self.actor.compute_log_prob(data=data, calculate_entropy=True)
             output = DataProto.from_dict(
                 tensors={"old_log_probs": output, "entropys": entropys},
                 meta_info={"temperature": self.config.rollout.temperature},
@@ -822,8 +822,8 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         with self.ulysses_sharding_manager:
             data = self.ulysses_sharding_manager.preprocess_data(data)
 
-            output, _, reward_scores, turn_means, turn_starts_ = self.ref_policy.compute_log_prob(data=data, calculate_entropy=False)
-            output = DataProto.from_dict(tensors={"ref_log_prob": output, "reward_scores": reward_scores, "turn_means": turn_means, "turn_starts_": turn_starts_})
+            output, _, reward_scores, turn_means, turn_starts_, next_line_probs = self.ref_policy.compute_log_prob(data=data, calculate_entropy=False)
+            output = DataProto.from_dict(tensors={"ref_log_prob": output, "reward_scores": reward_scores, "turn_means": turn_means, "turn_starts_": turn_starts_, "next_line_probs": next_line_probs})
             output = self.ulysses_sharding_manager.postprocess_data(output)
 
         output = output.to("cpu")

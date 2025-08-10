@@ -36,6 +36,7 @@ from verl.utils.seqlen_balancing import prepare_dynamic_batch, restore_dynamic_b
 from verl.utils.torch_functional import logprobs_from_logits
 from verl.utils.ulysses import gather_outputs_and_unpad, ulysses_pad, ulysses_pad_and_slice_inputs
 from verl.workers.actor import BasePPOActor
+from transformers import AutoTokenizer
 
 if is_cuda_available:
     from flash_attn.bert_padding import index_first_axis, pad_input, rearrange, unpad_input
@@ -237,68 +238,67 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy = full_entropy.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
                 log_probs = full_log_probs.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
 
-            
-            if calculate_format:
-                from transformers import AutoTokenizer
-                tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
-                ids = tokenizer.encode("\n", add_special_tokens=False)
-                assert len(ids) == 1, r"'\\n' isn't a single token in this tokenizer"
-                newline_id = ids[0]
+                
+                if calculate_format:
+                    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+                    ids = tokenizer.encode("\n", add_special_tokens=False)
+                    assert len(ids) == 1, r"'\\n' isn't a single token in this tokenizer"
+                    newline_id = ids[0]
 
-                # 1) (optional) if using ulysses sp, gather/unpad like you do for log_probs
-                if self.use_ulysses_sp:
-                    logits_rmpad = gather_outputs_and_unpad(
-                        logits_rmpad, gather_dim=0, unpad_dim=0, padding_size=pad_size
-                    )
+                    # 1) (optional) if using ulysses sp, gather/unpad like you do for log_probs
+                    if self.use_ulysses_sp:
+                        logits_rmpad = gather_outputs_and_unpad(
+                            logits_rmpad, gather_dim=0, unpad_dim=0, padding_size=pad_size
+                        )
 
-                # 2) pad back to (bsz, seqlen, vocab)
-                full_logits = pad_input(
-                    hidden_states=logits_rmpad,  # (total_nnz, vocab)
-                    indices=indices,
-                    batch=batch_size,
-                    seqlen=seqlen,
-                )[:, -response_length - 1 : -1, :]  # -> (bsz, seqlen, vocab)
+                    # 2) pad back to (bsz, seqlen, vocab)
+                    full_logits = pad_input(
+                        hidden_states=logits_rmpad,  # (total_nnz, vocab)
+                        indices=indices,
+                        batch=batch_size,
+                        seqlen=seqlen,
+                    )[:, -response_length - 1 : -1, :]  # -> (bsz, seqlen, vocab)
 
-                response_mask = micro_batch["response_mask"]  # (bsz, seqlen)
-                prev_mask = torch.cat([
-                    torch.zeros(batch_size, 1, device=input_ids.device, dtype=input_ids.dtype),
-                    response_mask[:, :-1]
-                ], dim=1)  # (bsz, seqlen)
+                    response_mask = micro_batch["response_mask"]  # (bsz, seqlen)
+                    prev_mask = torch.cat([
+                        torch.zeros(batch_size, 1, device=input_ids.device, dtype=input_ids.dtype),
+                        response_mask[:, :-1]
+                    ], dim=1)  # (bsz, seqlen)
 
-                # Positions where we transition from 0 to 1 (start of response turns)
-                turn_start_positions = (response_mask == 1) & (prev_mask == 0)  # (bsz, seqlen)
-                """
-                # Get the timesteps that predict these first tokens (shift left by 1)
-                # Since logits at position i predict token at position i+1
-                predict_positions = torch.cat([
-                    turn_start_positions[:, 1:],
-                    torch.zeros(batch_size, 1, device=turn_start_positions.device, dtype=torch.bool)
-                ], dim=1)  # (bsz, seqlen)
-                """
+                    # Positions where we transition from 0 to 1 (start of response turns)
+                    turn_start_positions = (response_mask == 1) & (prev_mask == 0)  # (bsz, seqlen)
+                    """
+                    # Get the timesteps that predict these first tokens (shift left by 1)
+                    # Since logits at position i predict token at position i+1
+                    predict_positions = torch.cat([
+                        turn_start_positions[:, 1:],
+                        torch.zeros(batch_size, 1, device=turn_start_positions.device, dtype=torch.bool)
+                    ], dim=1)  # (bsz, seqlen)
+                    """
 
-                # Extract logits where predict_positions is True, maintaining batch structure
-                first_step_logits = full_logits[turn_start_positions]  # (total_first_tokens, vocab)
+                    # Extract logits where predict_positions is True, maintaining batch structure
+                    first_step_logits = full_logits[turn_start_positions]  # (total_first_tokens, vocab)
 
-                p_first_is_newline_flat = torch.exp(
-                    F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
-                )  # (total_first_tokens,)
+                    p_first_is_newline_flat = torch.exp(
+                        F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
+                    )  # (total_first_tokens,)
 
-                # Reshape to (bsz, max_turns) format
-                # Count number of turns per batch item
-                turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
-                max_turns = turns_per_batch.max().item()
+                    # Reshape to (bsz, max_turns) format
+                    # Count number of turns per batch item
+                    turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
+                    max_turns = turns_per_batch.max().item()
 
-                # Initialize output tensor
-                p_first_is_newline = torch.zeros(batch_size, max_turns, device=input_ids.device, dtype=input_ids.dtype)  # (bsz, max_turns)
+                    # Initialize output tensor
+                    p_first_is_newline = torch.zeros(batch_size, max_turns, device=input_ids.device, dtype=input_ids.dtype)  # (bsz, max_turns)
 
-                # Fill in the probabilities for each batch item
-                flat_idx = 0
-                for batch_idx in range(batch_size):
-                    num_turns = turns_per_batch[batch_idx].item()
-                    assert num_turns > 0
-                    if num_turns > 0:
-                        p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
-                        flat_idx += num_turns
+                    # Fill in the probabilities for each batch item
+                    flat_idx = 0
+                    for batch_idx in range(batch_size):
+                        num_turns = turns_per_batch[batch_idx].item()
+                        assert num_turns > 0
+                        if num_turns > 0:
+                            p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
+                            flat_idx += num_turns
 
             
             else:  # not using rmpad and no ulysses sp
@@ -330,6 +330,7 @@ class DataParallelPPOActor(BasePPOActor):
                             entropy = verl_F.entropy_from_logits(logits)  # (bsz, response_length)
                         else:
                             entropy = torch.utils.checkpoint.checkpoint(verl_F.entropy_from_logits, logits)
+            
             if calculate_format:
                 return entropy, log_probs, p_first_is_newline.detach()
             else:
@@ -396,6 +397,7 @@ class DataParallelPPOActor(BasePPOActor):
         reward_lst = []
         true_means_lst = []
         turn_starts_lst = []
+        next_line_prob_lst = []
        # from transformers import AutoTokenizer
        # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for mini_iter, micro_batch in enumerate(micro_batches):
@@ -404,8 +406,8 @@ class DataParallelPPOActor(BasePPOActor):
             response_mask = model_inputs["response_mask"]
             response_ids = model_inputs["responses"]
             with torch.no_grad():
-                entropy, log_probs = self._forward_micro_batch(  # p_first_is_newline
-                    model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
+                entropy, log_probs, p_first_is_newline = self._forward_micro_batch(  # p_first_is_newline
+                    model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
                 )
                 prob = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
@@ -488,9 +490,9 @@ class DataParallelPPOActor(BasePPOActor):
              #   print("sususm", torch.sum(p_first_is_newline!=0, dim=-1))
              #   print("turn_means_noformat", torch.sum(turn_means_noformat !=0, dim=-1), turn_means_noformat.size())
               #  p_first_is_newline = p_first_is_newline * 0.5
-            ###    p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0).to(device=format_reward.device, dtype=format_reward.dtype)
+                p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0)#.to(device=format_reward.device, dtype=format_reward.dtype)
 
-                turn_means = turn_means_noformat + format_reward #+ p_first_is_newline
+                turn_means = turn_means_noformat + format_reward + p_first_is_newline * 0.5
 
                 """
                 window = 4
@@ -522,6 +524,7 @@ class DataParallelPPOActor(BasePPOActor):
             num_turns = model_inputs["num_turns"]
           #  assert torch.equal(nonzero_counts, num_turns)
             true_means_lst.append(torch.sum(turn_means_noformat, dim=-1) / num_turns)# nonzero_counts)
+            next_line_prob_lst.append(torch.sum(p_first_is_newline, dim=-1) / num_turns)
 
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)
@@ -529,6 +532,7 @@ class DataParallelPPOActor(BasePPOActor):
             if calculate_entropy:
                 entropy_lst.append(entropy)
         true_means_ = torch.concat(true_means_lst, dim=0)
+        next_line_probs = torch.concat(next_line_prob_lst, dim=0)
         reward_scores = torch.concat(reward_lst, dim=0)
         log_probs = torch.concat(log_probs_lst, dim=0)
         turn_starts_ = torch.concat(turn_starts_lst, dim=0)
@@ -550,7 +554,7 @@ class DataParallelPPOActor(BasePPOActor):
 #            index=uid,
 #            norm_adv_by_std_in_grpo=True,
 #        )
-        return log_probs, entropys, reward_scores, true_means_, turn_starts_ #, advantages
+        return log_probs, entropys, reward_scores, true_means_, turn_starts_, next_line_probs #, advantages
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):
