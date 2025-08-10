@@ -300,9 +300,9 @@ class DataParallelPPOActor(BasePPOActor):
                         turn_start_mask_expanded = turn_start_positions.unsqueeze(-1)  # (bsz, seqlen, 1)
                         first_step_logits = full_logits * turn_start_mask_expanded  # (bsz, seqlen, vocab)
 
-                        p_first_is_newline = torch.exp(
+                        p_first_is_newline = (turn_start_positions * torch.exp(
                             F.log_softmax(first_step_logits, dim=-1)[:, :, newline_id]
-                        ).to(device=log_probs.device, dtype=log_probs.dtype)  # (bsz, seqlen,)
+                        )).to(device=log_probs.device, dtype=log_probs.dtype)  # (bsz, seqlen,)
 
             
             else:  # not using rmpad and no ulysses sp
@@ -719,7 +719,8 @@ class DataParallelPPOActor(BasePPOActor):
                         loss = policy_loss / self.gradient_accumulation
                     loss.backward()
                     if self.config.prob_in_loss:
-                        micro_batch_metrics.update({"critic/next_line_probs_inloss/mean": torch.mean(p_first_is_newline).detach().item()})
+                        mean_p_first_is_newline = torch.sum(p_first_is_newline, dim=-1) / torch.sum(p_first_is_newline != 0, dim=-1)
+                        micro_batch_metrics.update({"critic/next_line_probs_inloss/mean": torch.mean(mean_p_first_is_newline).detach().item()})
 
                     micro_batch_metrics.update(
                         {
