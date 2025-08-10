@@ -275,28 +275,34 @@ class DataParallelPPOActor(BasePPOActor):
                         torch.zeros(batch_size, 1, device=turn_start_positions.device, dtype=torch.bool)
                     ], dim=1)  # (bsz, seqlen)
                     """
+                    if not self.config.prob_in_loss:
+                        # Extract logits where predict_positions is True, maintaining batch structure
+                        first_step_logits = full_logits[turn_start_positions]  # (total_first_tokens, vocab)
+                        p_first_is_newline_flat = torch.exp(
+                            F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
+                        ).to(device=log_probs.device, dtype=log_probs.dtype)  # (total_first_tokens,)
+                        # Reshape to (bsz, max_turns) format
+                        # Count number of turns per batch item
+                        turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
+                        max_turns = turns_per_batch.max().item()
 
-                    # Extract logits where predict_positions is True, maintaining batch structure
-                    first_step_logits = full_logits[turn_start_positions]  # (total_first_tokens, vocab)
+                        # Initialize output tensor
+                        p_first_is_newline = torch.zeros(batch_size, max_turns, device=log_probs.device, dtype=log_probs.dtype)  # (bsz, max_turns)
 
-                    p_first_is_newline_flat = torch.exp(
-                        F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
-                    ).to(device=log_probs.device, dtype=log_probs.dtype)  # (total_first_tokens,)
-                    # Reshape to (bsz, max_turns) format
-                    # Count number of turns per batch item
-                    turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
-                    max_turns = turns_per_batch.max().item()
+                        # Fill in the probabilities for each batch item
+                        flat_idx = 0
+                        for batch_idx in range(batch_size):
+                            num_turns = turns_per_batch[batch_idx].item()
+                            assert num_turns > 0
+                            p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
+                            flat_idx += num_turns
+                    else:
+                        turn_start_mask_expanded = turn_start_positions.unsqueeze(-1)  # (bsz, seqlen, 1)
+                        first_step_logits = full_logits * turn_start_mask_expanded  # (bsz, seqlen, vocab)
 
-                    # Initialize output tensor
-                    p_first_is_newline = torch.zeros(batch_size, max_turns, device=log_probs.device, dtype=log_probs.dtype)  # (bsz, max_turns)
-
-                    # Fill in the probabilities for each batch item
-                    flat_idx = 0
-                    for batch_idx in range(batch_size):
-                        num_turns = turns_per_batch[batch_idx].item()
-                        assert num_turns > 0
-                        p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
-                        flat_idx += num_turns
+                        p_first_is_newline = torch.exp(
+                            F.log_softmax(first_step_logits, dim=-1)[:, :, newline_id]
+                        ).to(device=log_probs.device, dtype=log_probs.dtype)  # (bsz, seqlen,)
 
             
             else:  # not using rmpad and no ulysses sp
@@ -330,7 +336,7 @@ class DataParallelPPOActor(BasePPOActor):
                             entropy = torch.utils.checkpoint.checkpoint(verl_F.entropy_from_logits, logits)
             
             if calculate_format:
-                return entropy, log_probs, p_first_is_newline.detach()
+                return entropy, log_probs, p_first_is_newline
             else:
                 return entropy, log_probs
 
@@ -404,9 +410,14 @@ class DataParallelPPOActor(BasePPOActor):
             response_mask = model_inputs["response_mask"]
             response_ids = model_inputs["responses"]
             with torch.no_grad():
-                entropy, log_probs, p_first_is_newline = self._forward_micro_batch(  # p_first_is_newline
-                    model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
-                )
+                if self.config.prob_in_loss:
+                    entropy, log_probs = self._forward_micro_batch(
+                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
+                    )
+                else:
+                    entropy, log_probs, p_first_is_newline = self._forward_micro_batch(
+                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
+                    )
                 prob = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)               
@@ -488,8 +499,10 @@ class DataParallelPPOActor(BasePPOActor):
              #   print("sususm", torch.sum(p_first_is_newline!=0, dim=-1))
              #   print("turn_means_noformat", torch.sum(turn_means_noformat !=0, dim=-1), turn_means_noformat.size())
               #  p_first_is_newline = p_first_is_newline * 0.5
-                p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0)#.to(device=format_reward.device, dtype=format_reward.dtype)
-                turn_means = turn_means_noformat + format_reward + p_first_is_newline #* 0.5
+                turn_means = turn_means_noformat + format_reward 
+                if not self.config.prob_in_loss:
+                    p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0).detach()
+                    turn_means = turn_means + p_first_is_newline * self.config.prob_in_reward_coeff
 
                 """
                 window = 4
@@ -521,7 +534,8 @@ class DataParallelPPOActor(BasePPOActor):
             num_turns = model_inputs["num_turns"]
           #  assert torch.equal(nonzero_counts, num_turns)
             true_means_lst.append(torch.sum(turn_means_noformat, dim=-1) / num_turns)# nonzero_counts)
-            next_line_prob_lst.append(torch.sum(p_first_is_newline, dim=-1) / num_turns)
+            if not self.config.prob_in_loss:
+                next_line_prob_lst.append(torch.sum(p_first_is_newline, dim=-1) / num_turns)
 
             log_probs_lst.append(log_probs)
             reward_lst.append(reward_scores)
@@ -529,7 +543,10 @@ class DataParallelPPOActor(BasePPOActor):
             if calculate_entropy:
                 entropy_lst.append(entropy)
         true_means_ = torch.concat(true_means_lst, dim=0)
-        next_line_probs = torch.concat(next_line_prob_lst, dim=0)
+        if not self.config.prob_in_loss:
+            next_line_probs = torch.concat(next_line_prob_lst, dim=0)
+        else:
+            next_line_probs = None
         reward_scores = torch.concat(reward_lst, dim=0)
         log_probs = torch.concat(log_probs_lst, dim=0)
         turn_starts_ = torch.concat(turn_starts_lst, dim=0)
@@ -617,9 +634,18 @@ class DataParallelPPOActor(BasePPOActor):
                     calculate_entropy = False
                     if entropy_coeff != 0:
                         calculate_entropy = True
-                    entropy, log_prob = self._forward_micro_batch(
-                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
-                    )
+                  #  entropy, log_prob = self._forward_micro_batch(
+                  #      model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
+                  #  )
+
+                    if not self.config.prob_in_loss:
+                        entropy, log_prob = self._forward_micro_batch(
+                            model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
+                        )
+                    else:
+                        entropy, log_prob, p_first_is_newline = self._forward_micro_batch(
+                            model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
+                        )
                     """
                     with torch.no_grad():
                         gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
@@ -663,6 +689,9 @@ class DataParallelPPOActor(BasePPOActor):
                             config=self.config,
                         )
 
+                    if self.config.prob_in_loss:
+                        p_first_is_newline_loss = agg_loss(loss_mat=p_first_is_newline, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+                        pg_loss = pg_loss - p_first_is_newline_loss * self.config.prob_in_loss_coeff
                     if entropy_coeff != 0:
                         entropy_loss = agg_loss(loss_mat=entropy, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
 
@@ -689,6 +718,8 @@ class DataParallelPPOActor(BasePPOActor):
                     else:
                         loss = policy_loss / self.gradient_accumulation
                     loss.backward()
+                    if self.config.prob_in_loss:
+                        micro_batch_metrics.update({"critic/next_line_probs_inloss/mean": torch.mean(p_first_is_newline).detach().item()})
 
                     micro_batch_metrics.update(
                         {

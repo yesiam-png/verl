@@ -823,7 +823,10 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             data = self.ulysses_sharding_manager.preprocess_data(data)
 
             output, _, reward_scores, turn_means, turn_starts_, next_line_probs = self.ref_policy.compute_log_prob(data=data, calculate_entropy=False)
-            output = DataProto.from_dict(tensors={"ref_log_prob": output, "reward_scores": reward_scores, "turn_means": turn_means, "turn_starts_": turn_starts_, "next_line_probs": next_line_probs})
+            if next_line_probs is not None:
+                output = DataProto.from_dict(tensors={"ref_log_prob": output, "reward_scores": reward_scores, "turn_means": turn_means, "turn_starts_": turn_starts_, "next_line_probs": next_line_probs})
+            else:
+                output = DataProto.from_dict(tensors={"ref_log_prob": output, "reward_scores": reward_scores, "turn_means": turn_means, "turn_starts_": turn_starts_})
             output = self.ulysses_sharding_manager.postprocess_data(output)
 
         output = output.to("cpu")

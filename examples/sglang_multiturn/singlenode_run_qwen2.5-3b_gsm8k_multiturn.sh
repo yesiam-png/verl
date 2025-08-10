@@ -22,7 +22,11 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=40 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=10 \
+    +actor_rollout_ref.ref.prob_in_loss=True \
+    +actor_rollout_ref.actor.prob_in_loss=True \
+    +actor_rollout_ref.actor.prob_in_loss_coeff=0.01 \
+    +actor_rollout_ref.ref.prob_in_reward_coeff=1.0 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=80 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.kl_loss_coef=0.0 \
@@ -42,7 +46,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt' \
-    trainer.experiment_name='noentropy-prob-mean-nostd-format1-probnextline1-ref' \
+    trainer.experiment_name='noentropy-prob-mean-nostd-format1-probloss-ref' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \

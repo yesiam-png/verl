@@ -150,7 +150,10 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
   #  sequence_score = batch.batch["token_level_scores"].sum(-1)
   #  sequence_reward = batch.batch["token_level_rewards"].sum(-1)
     sequence_reward = batch.batch["turn_means"] #["reward_scores"]
-    next_line_probs = batch.batch["next_line_probs"]
+    if "next_line_probs" in batch.batch:
+        next_line_probs = batch.batch["next_line_probs"]
+    else:
+        next_line_probs = None
 
     advantages = batch.batch["advantages"]
   #  returns = batch.batch["returns"]
@@ -196,7 +199,6 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
         "critic/advantages/min": torch.min(valid_adv).detach().item(),
 
         "critic/format_reward/mean": torch.mean(format_reward).detach().item(),
-        "critic/next_line_probs/mean": torch.mean(next_line_probs).detach().item(),
    #     "critic/format_reward/max": torch.max(format_reward).detach().item(),
    #     "critic/format_reward/min": torch.min(format_reward).detach().item(),
         # returns
@@ -228,6 +230,9 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
         "prompt_length/min": torch.min(prompt_length).detach().item(),
         "prompt_length/clip_ratio": torch.mean(torch.eq(prompt_length, max_prompt_length).float()).detach().item(),
     }
+    if next_line_probs is not None:
+        metrics["critic/next_line_probs/mean"] = torch.mean(next_line_probs).detach().item()
+
 
     # multi-turn conversation
     if "__num_turns__" in batch.non_tensor_batch:
