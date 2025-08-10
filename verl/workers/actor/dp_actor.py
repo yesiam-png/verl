@@ -261,7 +261,7 @@ class DataParallelPPOActor(BasePPOActor):
 
                     response_mask = micro_batch["response_mask"]  # (bsz, seqlen)
                     prev_mask = torch.cat([
-                        torch.zeros(batch_size, 1, device=input_ids.device, dtype=input_ids.dtype),
+                        torch.zeros(batch_size, 1, device=log_probs.device, dtype=log_probs.dtype),
                         response_mask[:, :-1]
                     ], dim=1)  # (bsz, seqlen)
 
@@ -281,24 +281,22 @@ class DataParallelPPOActor(BasePPOActor):
 
                     p_first_is_newline_flat = torch.exp(
                         F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
-                    )  # (total_first_tokens,)
-
+                    ).to(device=log_probs.device, dtype=log_probs.dtype)  # (total_first_tokens,)
                     # Reshape to (bsz, max_turns) format
                     # Count number of turns per batch item
                     turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
                     max_turns = turns_per_batch.max().item()
 
                     # Initialize output tensor
-                    p_first_is_newline = torch.zeros(batch_size, max_turns, device=input_ids.device, dtype=input_ids.dtype)  # (bsz, max_turns)
+                    p_first_is_newline = torch.zeros(batch_size, max_turns, device=log_probs.device, dtype=log_probs.dtype)  # (bsz, max_turns)
 
                     # Fill in the probabilities for each batch item
                     flat_idx = 0
                     for batch_idx in range(batch_size):
                         num_turns = turns_per_batch[batch_idx].item()
                         assert num_turns > 0
-                        if num_turns > 0:
-                            p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
-                            flat_idx += num_turns
+                        p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
+                        flat_idx += num_turns
 
             
             else:  # not using rmpad and no ulysses sp
@@ -491,8 +489,7 @@ class DataParallelPPOActor(BasePPOActor):
              #   print("turn_means_noformat", torch.sum(turn_means_noformat !=0, dim=-1), turn_means_noformat.size())
               #  p_first_is_newline = p_first_is_newline * 0.5
                 p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0)#.to(device=format_reward.device, dtype=format_reward.dtype)
-
-                turn_means = turn_means_noformat + format_reward + p_first_is_newline * 0.5
+                turn_means = turn_means_noformat + format_reward + p_first_is_newline #* 0.5
 
                 """
                 window = 4
