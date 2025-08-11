@@ -275,27 +275,30 @@ class DataParallelPPOActor(BasePPOActor):
                         torch.zeros(batch_size, 1, device=turn_start_positions.device, dtype=torch.bool)
                     ], dim=1)  # (bsz, seqlen)
                     """
-                    if not self.config.prob_in_loss:
-                        # Extract logits where predict_positions is True, maintaining batch structure
-                        first_step_logits = full_logits[turn_start_positions]  # (total_first_tokens, vocab)
-                        p_first_is_newline_flat = torch.exp(
-                            F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
-                        ).to(device=log_probs.device, dtype=log_probs.dtype)  # (total_first_tokens,)
-                        # Reshape to (bsz, max_turns) format
-                        # Count number of turns per batch item
-                        turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
-                        max_turns = turns_per_batch.max().item()
+                  #  if not self.config.prob_in_loss:
+                    # Extract logits where predict_positions is True, maintaining batch structure
+                    first_step_logits = full_logits[turn_start_positions]  # (total_first_tokens, vocab)
+                    p_first_is_newline_flat = torch.exp(
+                        F.log_softmax(first_step_logits, dim=-1)[:, newline_id]
+                    ).to(device=log_probs.device, dtype=log_probs.dtype)  # (total_first_tokens,)
+                    # Reshape to (bsz, max_turns) format
+                    # Count number of turns per batch item
+                    turns_per_batch = turn_start_positions.sum(dim=1)  # (bsz,)
+                    max_turns = turns_per_batch.max().item()
 
-                        # Initialize output tensor
-                        p_first_is_newline = torch.zeros(batch_size, max_turns, device=log_probs.device, dtype=log_probs.dtype)  # (bsz, max_turns)
+                    # Initialize output tensor
+                    p_first_is_newline = torch.zeros(batch_size, max_turns, device=log_probs.device, dtype=log_probs.dtype)  # (bsz, max_turns)
+                    p_first_mask = torch.zeros(batch_size, max_turns, device=log_probs.device, dtype=response_mask.dtype)  # (bsz, max_turns)
 
-                        # Fill in the probabilities for each batch item
-                        flat_idx = 0
-                        for batch_idx in range(batch_size):
-                            num_turns = turns_per_batch[batch_idx].item()
-                            assert num_turns > 0
-                            p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
-                            flat_idx += num_turns
+                    # Fill in the probabilities for each batch item
+                    flat_idx = 0
+                    for batch_idx in range(batch_size):
+                        num_turns = turns_per_batch[batch_idx].item()
+                        assert num_turns > 0
+                        p_first_is_newline[batch_idx, :num_turns] = p_first_is_newline_flat[flat_idx:flat_idx + num_turns]
+                        p_first_mask[batch_idx, :num_turns] = 1.0
+                        flat_idx += num_turns
+                    """
                     else:
                         turn_start_mask_expanded = turn_start_positions.unsqueeze(-1)  # (bsz, seqlen, 1)
                         first_step_logits = full_logits * turn_start_mask_expanded  # (bsz, seqlen, vocab)
@@ -303,7 +306,7 @@ class DataParallelPPOActor(BasePPOActor):
                         p_first_is_newline = (turn_start_positions * torch.exp(
                             F.log_softmax(first_step_logits, dim=-1)[:, :, newline_id]
                         )).to(device=log_probs.device, dtype=log_probs.dtype)  # (bsz, seqlen,)
-
+                    """
             
             else:  # not using rmpad and no ulysses sp
                 extra_args = {}
@@ -336,7 +339,7 @@ class DataParallelPPOActor(BasePPOActor):
                             entropy = torch.utils.checkpoint.checkpoint(verl_F.entropy_from_logits, logits)
             
             if calculate_format:
-                return entropy, log_probs, p_first_is_newline
+                return entropy, log_probs, p_first_is_newline, p_first_mask
             else:
                 return entropy, log_probs
 
@@ -415,7 +418,7 @@ class DataParallelPPOActor(BasePPOActor):
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
                     )
                 else:
-                    entropy, log_probs, p_first_is_newline = self._forward_micro_batch(
+                    entropy, log_probs, p_first_is_newline, _ = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
                     )
                 prob = torch.exp(log_probs)
@@ -643,7 +646,7 @@ class DataParallelPPOActor(BasePPOActor):
                             model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
                         )
                     else:
-                        entropy, log_prob, p_first_is_newline = self._forward_micro_batch(
+                        entropy, log_prob, p_first_is_newline, p_first_mask = self._forward_micro_batch(
                             model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
                         )
                     """
@@ -690,7 +693,7 @@ class DataParallelPPOActor(BasePPOActor):
                         )
 
                     if self.config.prob_in_loss:
-                        p_first_is_newline_loss = agg_loss(loss_mat=p_first_is_newline, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+                        p_first_is_newline_loss = agg_loss(loss_mat=p_first_is_newline, loss_mask=p_first_mask, loss_agg_mode=loss_agg_mode)
                         pg_loss = pg_loss - p_first_is_newline_loss * self.config.prob_in_loss_coeff
                     if entropy_coeff != 0:
                         entropy_loss = agg_loss(loss_mat=entropy, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
