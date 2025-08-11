@@ -719,8 +719,10 @@ class DataParallelPPOActor(BasePPOActor):
                         loss = policy_loss / self.gradient_accumulation
                     loss.backward()
                     if self.config.prob_in_loss:
-                        mean_p_first_is_newline = torch.sum(p_first_is_newline, dim=-1) / torch.sum(p_first_is_newline != 0, dim=-1)
+                        mean_p_first_is_newline = torch.sum(p_first_is_newline, dim=-1) / torch.sum(p_first_is_newline != 0, dim=-1).clamp_min(1)
                         micro_batch_metrics.update({"critic/next_line_probs_inloss/mean": torch.mean(mean_p_first_is_newline).detach().item()})
+                        micro_batch_metrics.update({"critic/next_line_probs_inloss/max": torch.max(p_first_is_newline[p_first_is_newline!=0]).detach().item()})
+                        micro_batch_metrics.update({"critic/next_line_probs_inloss/min": torch.min(p_first_is_newline[p_first_is_newline!=0]).detach().item()})
 
                     micro_batch_metrics.update(
                         {
