@@ -696,7 +696,7 @@ class DataParallelPPOActor(BasePPOActor):
                         target = torch.ones_like(p_first_is_newline) * self.config.alpha
                         mse_loss = torch.square(target - p_first_is_newline)
                         p_first_is_newline_loss = agg_loss(loss_mat=mse_loss, loss_mask=p_first_mask, loss_agg_mode=loss_agg_mode) #loss_mat=p_first_is_newline
-                        pg_loss = pg_loss - p_first_is_newline_loss * self.config.prob_in_loss_coeff
+                        pg_loss = pg_loss + p_first_is_newline_loss * self.config.prob_in_loss_coeff
                     if entropy_coeff != 0:
                         entropy_loss = agg_loss(loss_mat=entropy, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
 
