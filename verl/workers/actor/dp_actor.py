@@ -502,7 +502,12 @@ class DataParallelPPOActor(BasePPOActor):
              #   print("sususm", torch.sum(p_first_is_newline!=0, dim=-1))
              #   print("turn_means_noformat", torch.sum(turn_means_noformat !=0, dim=-1), turn_means_noformat.size())
               #  p_first_is_newline = p_first_is_newline * 0.5
-                turn_means = turn_means_noformat + format_reward 
+                turn_means = turn_means_noformat + format_reward - torch.ones_like(format_reward)
+                format_mask = (format_reward > 0.5)            # dtype: bool, same shape as format
+                turn_means = turn_means.masked_fill(~format_mask, 0.0)
+                if mini_iter == 0:
+                    print("turn_means", turn_means[0])
+                
                 if not self.config.prob_in_loss:
                     p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0).detach()
 #                    turn_means = turn_means + p_first_is_newline * self.config.prob_in_reward_coeff
@@ -545,7 +550,7 @@ class DataParallelPPOActor(BasePPOActor):
           #  nonzero_counts = torch.sum(turn_means_noformat != 0, dim=-1)
             num_turns = model_inputs["num_turns"]
           #  assert torch.equal(nonzero_counts, num_turns)
-            true_means_lst.append(torch.sum(turn_means_noformat, dim=-1) / num_turns)# nonzero_counts)
+            true_means_lst.append(torch.sum(turn_means, dim=-1) / num_turns)# turn_means_noformat
             if not self.config.prob_in_loss:
                 next_line_prob_lst.append(torch.sum(p_first_is_newline, dim=-1) / num_turns)
 
