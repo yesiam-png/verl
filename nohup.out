@@ -586,3 +586,23 @@
 [36m(WorkerDict pid=1393530)[0m tid6:  [] endtid6
 [36m(WorkerDict pid=1393531)[0m tid1:  [6.545377087552318e-12, 0.010807535611093044, 0.09221585839986801, 0.5993202924728394, 0.07843952625989914] endtid1
 [36m(WorkerDict pid=1393531)[0m tid6:  [1.94288099919504e-06, 0.17220142483711243, 0.1302405744791031, 0.5892796516418457, 0.8861654996871948, 0.303844153881073] endtid6
+[36m(TaskRunner pid=1380083)[0m first_res: 
+[36m(TaskRunner pid=1380083)[0m def sum_of_unique_multiples(n):
+[36m(TaskRunner pid=1380083)[0m     # Start with the sum equal endfirst
+[36m(TaskRunner pid=1380083)[0m third_res:  # Check if the number is 
+[36m(TaskRunner pid=1380083)[0m         if i % 3 == 0 endthird
+[36m(TaskRunner pid=1380083)[0m seven_res: _of_unique_multiples(n)  total sum
+[36m(TaskRunner pid=1380083)[0m 
+[36m(TaskRunner pid=1380083)[0m ``` endseven
+[36m(TaskRunner pid=1380083)[0m first_res: 
+[36m(TaskRunner pid=1380083)[0m def sum_of_unique_multiples(n):
+[36m(TaskRunner pid=1380083)[0m     # Start with the sum equal endfirst
+[36m(TaskRunner pid=1380083)[0m third_res:  # Check if the number is 
+[36m(TaskRunner pid=1380083)[0m         if i % 3 == 0 endthird
+[36m(TaskRunner pid=1380083)[0m seven_res: _of_unique_multiples(n)  total sum
+[36m(TaskRunner pid=1380083)[0m 
+[36m(TaskRunner pid=1380083)[0m ``` endseven
+[36m(TaskRunner pid=1380083)[0m step:1 - global_seqlen/min:180838 - global_seqlen/max:203044 - global_seqlen/minmax_diff:22206 - global_seqlen/balanced_min:191341 - global_seqlen/balanced_max:191342 - global_seqlen/mean:191341.25 - actor/entropy:1.427287220954895 - critic/next_line_probs_inloss/mean:0.20819290727376938 - critic/next_line_probs_inloss/max:0.9968644380569458 - critic/next_line_probs_inloss/min:2.2491240640742927e-12 - actor/pg_loss:0.008562420185626252 - actor/pg_clipfrac:0.0006398925997928018 - actor/ppo_kl:4.5693582251260523e-07 - actor/pg_clipfrac_lower:0.0 - actor/grad_norm:0.09461215883493423 - perf/mfu/actor:0.1106001805291689 - perf/max_memory_allocated_gb:22.717711925506592 - perf/max_memory_reserved_gb:41.078125 - perf/cpu_memory_used_gb:112.606201171875 - actor/lr:1e-06 - training/global_step:1 - training/epoch:0 - critic/rewards/mean:0.41106516122817993 - critic/rewards/max:0.7252660989761353 - critic/rewards/min:0.06966275721788406 - critic/advantages/mean:-0.004136648029088974 - critic/advantages/max:1.3455983400344849 - critic/advantages/min:-0.6617212295532227 - critic/format_reward/mean:0.001960591645911336 - response_length/mean:14.722491264343262 - response_length/max:16.200000762939453 - response_length/min:6.0 - response_length/clip_ratio:0.0 - prompt_length/mean:51.95703125 - prompt_length/max:126.0 - prompt_length/min:34.0 - prompt_length/clip_ratio:0.0 - timing_s/start_profile:3.075005952268839e-05 - timing_s/generate_sequences:54.366920471191406 - timing_s/reshard:1.4222309589385986 - timing_s/gen:56.83971048297826 - timing_s/reward:0.955096437013708 - timing_s/old_log_prob:7.215710703050718 - timing_s/ref:6.028113513952121 - timing_s/adv:0.9592417759122327 - timing_s/update_actor:36.340912120067514 - timing_s/step:108.49501274293289 - timing_s/stop_profile:2.8209760785102844e-06 - timing_per_token_ms/adv:0.0028097368091027104 - timing_per_token_ms/update_actor:0.10644698867813185 - timing_per_token_ms/ref:0.017657083808191518 - timing_per_token_ms/gen:0.7540507656316233 - perf/total_num_tokens:1530730 - perf/time_per_step:108.49501274293289 - perf/throughput:1763.5948894108362
+[36m(TaskRunner pid=1380083)[0m Training Progress:   0%|          | 1/609 [01:50<18:36:22, 110.17s/it]
+[36m(WorkerDict pid=1393527)[0m /mnt/task_runtime/verl/verl/workers/rollout/sglang_rollout/utils.py:49: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:203.)[32m [repeated 7x across cluster][0m
+[36m(WorkerDict pid=1393527)[0m   tensor_data = torch.ByteTensor(np.frombuffer(serialized_data, dtype=np.uint8)).to(device)[32m [repeated 7x across cluster][0m
