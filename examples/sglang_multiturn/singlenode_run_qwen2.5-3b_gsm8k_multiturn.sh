@@ -25,8 +25,8 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=20 \
     +actor_rollout_ref.ref.prob_in_loss=True \
     +actor_rollout_ref.actor.prob_in_loss=True \
-    +actor_rollout_ref.actor.prob_in_loss_coeff=0.01 \
-    +actor_rollout_ref.actor.alpha=0.7 \
+    +actor_rollout_ref.actor.prob_in_loss_coeff=0.005 \
+    +actor_rollout_ref.actor.alpha=0.95 \
     +actor_rollout_ref.ref.prob_in_reward_coeff=1.0 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=80 \
     actor_rollout_ref.actor.use_kl_loss=False \
@@ -35,7 +35,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=32 \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=40 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=sglang \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
@@ -46,8 +46,8 @@ python3 -m verl.trainer.main_ppo \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
-    trainer.project_name='rl-code-cpt-new' \
-    trainer.experiment_name='noentropy-prob-mean-nostd-format1-probloss001-07alpha-ref-rerun' \
+    trainer.project_name='rl-code-cpt-aug12' \
+    trainer.experiment_name='noentropy-prob-mean-nostd-format1-probloss0005-095alpha-ref-rerun' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
