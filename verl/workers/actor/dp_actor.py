@@ -505,14 +505,23 @@ class DataParallelPPOActor(BasePPOActor):
                 turn_means = turn_means_noformat + format_reward 
                 if not self.config.prob_in_loss:
                     p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0).detach()
-                    turn_means = turn_means + p_first_is_newline * self.config.prob_in_reward_coeff
+#                    turn_means = turn_means + p_first_is_newline * self.config.prob_in_reward_coeff
 
                 """
                 window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
                 x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
                 kernel = torch.ones(1, 1, window, dtype=x.dtype, device=x.device)
-                turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
+                #  turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
+                mask_ones = torch.ones_like(x)
+                mask_ones_padded = F.pad(mask_ones, (0, window - 1))
+
+
+                sum_window = F.conv1d(x_padded, kernel)          # sums over available elements
+                cnt_window = F.conv1d(mask_ones_padded, kernel)          # counts of real elements (no zeros)
+
+
+                turn_means = (sum_window / cnt_window.clamp_min(1e-8)).squeeze(1)  # [B, L]
                 """
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
