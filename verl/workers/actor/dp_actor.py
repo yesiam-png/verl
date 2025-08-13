@@ -405,8 +405,8 @@ class DataParallelPPOActor(BasePPOActor):
         true_means_lst = []
         turn_starts_lst = []
         next_line_prob_lst = []
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+       # from transformers import AutoTokenizer
+       # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for mini_iter, micro_batch in enumerate(micro_batches):
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
             response_attention_mask = model_inputs["response_attention_mask"]
@@ -473,8 +473,8 @@ class DataParallelPPOActor(BasePPOActor):
                 #        print("oldtid1: ", tid1_list, "oldendtid1")
                 #        print("oldtid6: ", tid2_list, "oldendtid6")
                   #  """
-                        prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
-                        print("prompt_and_firstturn", tokenizer.decode(prompt_and_firstturn.tolist(), skip_special_tokens=True), "endprompt_and_firstturn")
+#                        prompt_and_firstturn =  model_inputs["input_ids"][0, :-response_length_mine + count1]
+#                        print("prompt_and_firstturn", tokenizer.decode(prompt_and_firstturn.tolist(), skip_special_tokens=True), "endprompt_and_firstturn")
             #    print("deeeee", tokenizer.decode(model_inputs["input_ids"][0, -response_length_mine + count1:-response_length_mine + count1+2].tolist(), skip_special_tokens=True), "enddebug")
 
                # from transformers import AutoTokenizer
@@ -514,7 +514,16 @@ class DataParallelPPOActor(BasePPOActor):
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
                 x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
                 kernel = torch.ones(1, 1, window, dtype=x.dtype, device=x.device)
-                turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
+                #  turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
+                mask_ones = torch.ones_like(x)
+                mask_ones_padded = F.pad(mask_ones, (0, window - 1))
+
+
+                sum_window = F.conv1d(x_padded, kernel)          # sums over available elements
+                cnt_window = F.conv1d(mask_ones_padded, kernel)          # counts of real elements (no zeros)
+
+
+                turn_means = (sum_window / cnt_window.clamp_min(1e-8)).squeeze(1)  # [B, L]
                 """
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
