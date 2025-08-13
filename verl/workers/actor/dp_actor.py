@@ -405,8 +405,8 @@ class DataParallelPPOActor(BasePPOActor):
         true_means_lst = []
         turn_starts_lst = []
         next_line_prob_lst = []
-       # from transformers import AutoTokenizer
-       # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for mini_iter, micro_batch in enumerate(micro_batches):
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
             response_attention_mask = model_inputs["response_attention_mask"]
