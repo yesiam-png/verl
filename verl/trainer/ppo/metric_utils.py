@@ -78,7 +78,7 @@ def extract_first_sequence(token_ids, diffs):
     second_start_idx = starts[6]
     second_end_idx = ends[6]
 
-    return token_ids[first_start_idx:first_end_idx], token_ids[second_start_idx:second_end_idx], token_ids[starts[3]:ends[3]]
+    return token_ids[first_start_idx:first_end_idx], token_ids[second_start_idx:second_end_idx], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]]
 
 def _compute_response_info(batch: DataProto) -> dict[str, Any]:
     """
@@ -107,12 +107,14 @@ def _compute_response_info(batch: DataProto) -> dict[str, Any]:
     diffs = padded_mask.diff()
     num_turns = torch.sum(diffs == 1, dim=-1)
     try:
-        first_res, second_res, third_res = extract_first_sequence(batch.batch["responses"][0], diffs[0])
+        first_res, seven_res, second_res, third_res, fourth_res = extract_first_sequence(batch.batch["responses"][0], diffs[0])
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
+        print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
         print("third_res:", tokenizer.decode(third_res.tolist()), "endthird")
-        print("seven_res:", tokenizer.decode(second_res.tolist()), "endseven")
+        print("fourth_res:", tokenizer.decode(fourth_res.tolist()), "endfourth")
+        print("seven_res:", tokenizer.decode(seven_res.tolist()), "endseven")
     except Exception as e:
         print("error!!", e)
 

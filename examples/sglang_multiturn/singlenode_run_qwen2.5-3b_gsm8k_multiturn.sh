@@ -40,6 +40,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.name=sglang \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
     actor_rollout_ref.rollout.n=5 \
+    actor_rollout_ref.rollout.temperature=0.6 \
     +actor_rollout_ref.rollout.per_turn_response_length=16 \
     +actor_rollout_ref.rollout.max_code_lines=32 \
     actor_rollout_ref.rollout.response_length=1024 \
@@ -47,7 +48,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt-aug12' \
-    trainer.experiment_name='noentropy-prob-mean-nostd-format1-probloss0005-095alpha-ref-rerun' \
+    trainer.experiment_name='noentropy-prob-mean-nostd-formatallzero-probloss0005-095alpha-ref-stop' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \

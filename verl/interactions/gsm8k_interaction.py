@@ -76,7 +76,8 @@ class Gsm8kInteraction(BaseInteraction):
             should_terminate_sequence = False
         """
      #   response = self._instance_dict[instance_id]["ground_truth"]
-        if (content.lstrip().startswith("#") and content.endswith("\n") and "\n" not in content[:-1]) or content == "\n":
+        assert "\n" not in content
+        if (content.lstrip().startswith("#")) or content.strip() == "":
             reward = 1.0
        # elif content == "\n":
        #     reward = 0.5 
