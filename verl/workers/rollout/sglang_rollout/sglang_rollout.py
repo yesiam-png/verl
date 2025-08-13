@@ -863,7 +863,7 @@ class SGLangRollout(BaseRollout):
                     )
 
                 output = await self._handle_engine_call(_req, request_sampling_params, image_data=image_data)
-                content = output["text"] + "\n"
+                content = output["text"].split("\n")[0]
                 finish_reason_type = FinishReasonTypeEnum.from_str(output["meta_info"]["finish_reason"]["type"])
                 current_turns += 1
                 #if finish_reason_type == FinishReasonTypeEnum.LENGTH:
@@ -873,7 +873,7 @@ class SGLangRollout(BaseRollout):
 
                 _req.add_assistant_message(
                     self.processing_class,
-                    content, user_turns
+                    content + "\n", user_turns
                 )
                 interaction_name = _req.interaction_kwargs.get(
                     "name", "gsm8k"
