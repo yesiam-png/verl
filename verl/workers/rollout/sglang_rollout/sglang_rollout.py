@@ -964,7 +964,6 @@ class SGLangRollout(BaseRollout):
         kwargs["skip_special_tokens"] = True
       #  kwargs["frequency_penalty"] = 2.0
         #kwargs["stop"] = "\n"
-        print("kwargs", kwargs)
         output = await self._engine.async_generate(
             input_ids=generation_prompt_ids,
             sampling_params=kwargs,
