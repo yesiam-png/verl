@@ -509,8 +509,8 @@ class DataParallelPPOActor(BasePPOActor):
                     p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0).detach()
                     turn_means = turn_means + p_first_is_newline * self.config.prob_in_reward_coeff
 
-                """
-                window = 4
+             #   """
+                window = 3
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
                 x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
                 kernel = torch.ones(1, 1, window, dtype=x.dtype, device=x.device)
@@ -524,7 +524,7 @@ class DataParallelPPOActor(BasePPOActor):
 
 
                 turn_means = (sum_window / cnt_window.clamp_min(1e-8)).squeeze(1)  # [B, L]
-                """
+             #   """
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
                 per_token_means = torch.gather(turn_means, 1, masked_turn_ids)

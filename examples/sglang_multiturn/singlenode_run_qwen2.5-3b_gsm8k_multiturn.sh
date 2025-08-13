@@ -48,7 +48,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt-aug13' \
-    trainer.experiment_name='onetemp-noentropy-prob-mean-nostd-formatallzero-probloss0005-095alpha-ref-stop' \
+    trainer.experiment_name='window3-onetemp-noentropy-prob-mean-nostd-formatallzero-probloss0005-095alpha-ref-stop' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
