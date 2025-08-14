@@ -19,6 +19,7 @@ python3 -m verl.trainer.main_ppo \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
     actor_rollout_ref.model.path=Qwen/Qwen2.5-3B \
+    +actor_rollout_ref.actor.ntp_coeff=1e-2 \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
@@ -28,7 +29,6 @@ python3 -m verl.trainer.main_ppo \
     +actor_rollout_ref.actor.prob_in_loss_coeff=0.005 \
     +actor_rollout_ref.actor.alpha=0.95 \
     +actor_rollout_ref.ref.prob_in_reward_coeff=1.0 \
-    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=80 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.kl_loss_coef=0.0 \
     actor_rollout_ref.actor.entropy_coeff=0.0 \
@@ -48,11 +48,11 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt-aug13' \
-    trainer.experiment_name='window3-onetemp-noentropy-prob-mean-nostd-formatallzero-probloss0005-095alpha-ref-stop' \
+    trainer.experiment_name='ntp-noref-noentropy-prob-mean-nostd-formatallzero-probloss0005-095alpha-stop' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
-    trainer.save_freq=80 \
+    trainer.save_freq=20 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
     data.train_files=/root/data/sync_code/train.parquet \

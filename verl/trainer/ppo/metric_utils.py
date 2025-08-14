@@ -80,7 +80,7 @@ def extract_first_sequence(token_ids, diffs):
 
     return token_ids[first_start_idx:first_end_idx], token_ids[second_start_idx:second_end_idx], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]]
 
-def _compute_response_info(batch: DataProto) -> dict[str, Any]:
+def _compute_response_info(batch: DataProto, tokenizer) -> dict[str, Any]:
     """
     Computes information about prompts and responses from a batch.
 
@@ -108,8 +108,6 @@ def _compute_response_info(batch: DataProto) -> dict[str, Any]:
     num_turns = torch.sum(diffs == 1, dim=-1)
     try:
         first_res, seven_res, second_res, third_res, fourth_res = extract_first_sequence(batch.batch["responses"][0], diffs[0])
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
         print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
         print("third_res:", tokenizer.decode(third_res.tolist()), "endthird")
@@ -125,7 +123,7 @@ def _compute_response_info(batch: DataProto) -> dict[str, Any]:
     )
 
 
-def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str, Any]:
+def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=None) -> dict[str, Any]:
     """
     Computes various metrics from a batch of data for PPO training.
 
@@ -167,7 +165,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
 
     max_prompt_length = prompt_mask.size(-1)
 
-    response_info = _compute_response_info(batch)
+    response_info = _compute_response_info(batch, tokenizer)
     prompt_length = response_info["prompt_length"]
     response_length = response_info["response_length"]
 

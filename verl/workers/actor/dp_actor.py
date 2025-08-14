@@ -80,7 +80,7 @@ class DataParallelPPOActor(BasePPOActor):
         self.device_name = get_device_name()
 
     def _forward_micro_batch(
-        self, micro_batch, temperature, calculate_entropy=False, calculate_format=False
+        self, micro_batch, temperature, calculate_entropy=False, calculate_format=False, tokenizer=None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Returns:
@@ -240,7 +240,7 @@ class DataParallelPPOActor(BasePPOActor):
 
                 
                 if calculate_format:
-                    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
+                   # tokenizer = AutoTokenizer.from_pretrained(self.config.path, trust_remote_code=True)
                     ids = tokenizer.encode("\n", add_special_tokens=False)
                     assert len(ids) == 1, r"'\\n' isn't a single token in this tokenizer"
                     newline_id = ids[0]
@@ -362,7 +362,7 @@ class DataParallelPPOActor(BasePPOActor):
         return grad_norm
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
-    def compute_log_prob(self, data: DataProto, calculate_entropy=False) -> torch.Tensor:
+    def compute_log_prob(self, data: DataProto, calculate_entropy=False, tokenizer=None) -> torch.Tensor:
         """Compute the log probability of the responses given input_ids, attention_mask and position_ids
 
         Args:
@@ -415,11 +415,11 @@ class DataParallelPPOActor(BasePPOActor):
             with torch.no_grad():
                 if self.config.prob_in_loss:
                     entropy, log_probs = self._forward_micro_batch(
-                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
+                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False, tokenizer=tokenizer
                     )
                 else:
                     entropy, log_probs, p_first_is_newline, _ = self._forward_micro_batch(
-                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
+                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True, tokenizer=tokenizer
                     )
                 prob = torch.exp(log_probs)
                 #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
@@ -509,7 +509,7 @@ class DataParallelPPOActor(BasePPOActor):
                     p_first_is_newline = F.pad(p_first_is_newline, (1, 0), 'constant', 0).detach()
                     turn_means = turn_means + p_first_is_newline * self.config.prob_in_reward_coeff
 
-             #   """
+                """
                 window = 3
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
                 x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
@@ -524,7 +524,7 @@ class DataParallelPPOActor(BasePPOActor):
 
 
                 turn_means = (sum_window / cnt_window.clamp_min(1e-8)).squeeze(1)  # [B, L]
-             #   """
+                """
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
                 per_token_means = torch.gather(turn_means, 1, masked_turn_ids)
@@ -599,6 +599,7 @@ class DataParallelPPOActor(BasePPOActor):
             "position_ids",
             "old_log_probs",
             "advantages",
+            "response_attention_mask",
         ]
         if self.config.use_kl_loss:
             select_keys.append("ref_log_prob")
@@ -654,11 +655,11 @@ class DataParallelPPOActor(BasePPOActor):
 
                     if not self.config.prob_in_loss:
                         entropy, log_prob = self._forward_micro_batch(
-                            model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False
+                            model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=False, tokenizer=tokenizer
                         )
                     else:
                         entropy, log_prob, p_first_is_newline, p_first_mask = self._forward_micro_batch(
-                            model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True
+                            model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, calculate_format=True, tokenizer=tokenizer
                         )
                     """
                     with torch.no_grad():
@@ -716,6 +717,13 @@ class DataParallelPPOActor(BasePPOActor):
                     else:
                         policy_loss = pg_loss
 
+                    # NTP loss
+                    response_attention_mask = model_inputs["response_attention_mask"]
+                    gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)   
+                    ntp_loss = agg_loss(loss_mat=log_prob, loss_mask=gt_mask, loss_agg_mode=loss_agg_mode)
+                    policy_loss = policy_loss - ntp_loss * self.config.ntp_coeff
+                    micro_batch_metrics.update({"critic/ntp_loss/mean": -ntp_loss.detach().item()})
+
                     if self.config.use_kl_loss:
                         ref_log_prob = model_inputs["ref_log_prob"]
                         # compute kl loss
@@ -737,8 +745,8 @@ class DataParallelPPOActor(BasePPOActor):
                     if self.config.prob_in_loss:
                         mean_p_first_is_newline = torch.sum(p_first_is_newline, dim=-1) / torch.sum(p_first_is_newline != 0, dim=-1).clamp_min(1)
                         micro_batch_metrics.update({"critic/next_line_probs_inloss/mean": torch.mean(mean_p_first_is_newline).detach().item()})
-                        micro_batch_metrics.update({"critic/next_line_probs_inloss/max": torch.max(p_first_is_newline[p_first_is_newline!=0]).detach().item()})
-                        micro_batch_metrics.update({"critic/next_line_probs_inloss/min": torch.min(p_first_is_newline[p_first_is_newline!=0]).detach().item()})
+                    #    micro_batch_metrics.update({"critic/next_line_probs_inloss/max": torch.max(p_first_is_newline[p_first_is_newline!=0]).detach().item()})
+                    #    micro_batch_metrics.update({"critic/next_line_probs_inloss/min": torch.min(p_first_is_newline[p_first_is_newline!=0]).detach().item()})
 
                     micro_batch_metrics.update(
                         {
