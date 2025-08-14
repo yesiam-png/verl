@@ -18,7 +18,7 @@ python3 -m verl.trainer.main_ppo \
     data.truncation='error' \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
-    actor_rollout_ref.model.path=Qwen/Qwen2.5-3B \
+    actor_rollout_ref.model.path=/root/.cache/huggingface/hub/models--Qwen--Qwen2.5-3B/snapshots/3aab1f1954e9cc14eb9509a215f9e5ca08227a9b \
     +actor_rollout_ref.actor.ntp_coeff=1e-2 \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -48,7 +48,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt-aug13' \
-    trainer.experiment_name='ntp-noref-noentropy-prob-mean-nostd-formatallzero-probloss0005-095alpha-stop' \
+    trainer.experiment_name='ntp-noref-window3-noentropy-prob-mean-nostd-formatallzero-probloss0005-095alpha-stop' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \

@@ -80,7 +80,7 @@ def extract_first_sequence(token_ids, diffs):
 
     return token_ids[first_start_idx:first_end_idx], token_ids[second_start_idx:second_end_idx], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]]
 
-def _compute_response_info(batch: DataProto, tokenizer) -> dict[str, Any]:
+def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     """
     Computes information about prompts and responses from a batch.
 
@@ -107,12 +107,13 @@ def _compute_response_info(batch: DataProto, tokenizer) -> dict[str, Any]:
     diffs = padded_mask.diff()
     num_turns = torch.sum(diffs == 1, dim=-1)
     try:
-        first_res, seven_res, second_res, third_res, fourth_res = extract_first_sequence(batch.batch["responses"][0], diffs[0])
-        print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
-        print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
-        print("third_res:", tokenizer.decode(third_res.tolist()), "endthird")
-        print("fourth_res:", tokenizer.decode(fourth_res.tolist()), "endfourth")
-        print("seven_res:", tokenizer.decode(seven_res.tolist()), "endseven")
+        if tokenizer:
+            first_res, seven_res, second_res, third_res, fourth_res = extract_first_sequence(batch.batch["responses"][0], diffs[0])
+            print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
+            print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
+            print("third_res:", tokenizer.decode(third_res.tolist()), "endthird")
+            print("fourth_res:", tokenizer.decode(fourth_res.tolist()), "endfourth")
+            print("seven_res:", tokenizer.decode(seven_res.tolist()), "endseven")
     except Exception as e:
         print("error!!", e)
 
@@ -267,7 +268,7 @@ def compute_timing_metrics(batch: DataProto, timing_raw: dict[str, float]) -> di
         - Other stages ("ref", "values", "adv", "update_critic", "update_actor") use all tokens
           (prompt + response)
     """
-    response_info = _compute_response_info(batch)
+    response_info = _compute_response_info(batch, None)
     num_prompt_tokens = torch.sum(response_info["prompt_length"]).item()
     num_response_tokens = torch.sum(response_info["response_length"]).item()
     num_overall_tokens = num_prompt_tokens + num_response_tokens
