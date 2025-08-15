@@ -78,7 +78,7 @@ def extract_first_sequence(token_ids, diffs):
     second_start_idx = starts[6]
     second_end_idx = ends[6]
 
-    return token_ids[first_start_idx:first_end_idx], token_ids[second_start_idx:second_end_idx], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]]
+    return token_ids[first_start_idx:first_end_idx], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]],  token_ids[ends[0]:starts[1]], token_ids[ends[1]:starts[2]], token_ids[ends[2]:starts[3]]
 
 def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     """
@@ -108,12 +108,15 @@ def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     num_turns = torch.sum(diffs == 1, dim=-1)
     try:
         if tokenizer:
-            first_res, seven_res, second_res, third_res, fourth_res = extract_first_sequence(batch.batch["responses"][0], diffs[0])
+            first_res, second_res, third_res, fourth_res, second_prompt, third_prompt, fourth_prompt = extract_first_sequence(batch.batch["responses"][0], diffs[0])
             print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
+            print("second_prompt:", tokenizer.decode(second_prompt.tolist()), "end2prompt")
             print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
+            print("third_prompt:", tokenizer.decode(third_prompt.tolist()), "end3prompt")
             print("third_res:", tokenizer.decode(third_res.tolist()), "endthird")
+            print("fourth_prompt:", tokenizer.decode(fourth_prompt.tolist()), "end3prompt")
             print("fourth_res:", tokenizer.decode(fourth_res.tolist()), "endfourth")
-            print("seven_res:", tokenizer.decode(seven_res.tolist()), "endseven")
+         #   print("seven_res:", tokenizer.decode(seven_res.tolist()), "endseven")
     except Exception as e:
         print("error!!", e)
 

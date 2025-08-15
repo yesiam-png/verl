@@ -19,7 +19,7 @@ python3 -m verl.trainer.main_ppo \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
     actor_rollout_ref.model.path=Qwen/Qwen2.5-3B \
-    +actor_rollout_ref.actor.ntp_coeff=1e-3 \
+    +actor_rollout_ref.actor.ntp_coeff=1e-2 \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
@@ -47,8 +47,8 @@ python3 -m verl.trainer.main_ppo \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
-    trainer.project_name='rl-code-cpt-aug13' \
-    trainer.experiment_name='special-1e3ntp-noref-window3-noentropy-prob-mean-nostd-formatallzero-probloss0-08alpha-stop' \
+    trainer.project_name='rl-code-cpt-aug15' \
+    trainer.experiment_name='special-1e2ntp-noref-noentropy-prob-mean-nostd-formatallzero-probloss0-08alpha-stop' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
