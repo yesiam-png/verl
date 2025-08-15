@@ -56,7 +56,7 @@ if __name__ == "__main__":
             A list of strings, where each element is a block of comments,
             blank lines, and the single line of code that follows it.
         """
-        lines = code_text.splitlines(keepends=False) # no \n in it!!!
+        lines = code_text.splitlines(keepends=True) # no \n in it!!!
         if not lines:
             return []
 
@@ -90,7 +90,7 @@ if __name__ == "__main__":
             # 3. Append the line and split if it was determined to be code
             current_chunk.append(line)
             if is_this_line_code:
-                result_chunks.append("\n".join(current_chunk) + "<eol>")
+                result_chunks.append("\n".join(current_chunk))
                 current_chunk = []
 
         # Add any trailing lines (e.g., final comments/blank lines)
@@ -121,7 +121,8 @@ if __name__ == "__main__":
                 no_asserts = no_asserts[: last_fence + 1]
             question_raw = "\n".join(no_asserts)
 
-            system_prompt = "After each <eol>, either provide a concise comment explaining the purpose and logic of the upcoming section of code, OR directly skip to the next line."
+            system_prompt = "For each upcoming section of code, either provide a concise comment explaining it, OR directly skip to the next line."
+#            system_prompt = "After each <eol>, either provide a concise comment explaining the purpose and logic of the upcoming section of code, OR directly skip to the next line."
           #  system_prompt = "Generate either a comment to explain the next several lines of code, or skip directly to the next line."
             question = system_prompt + question_raw
 
