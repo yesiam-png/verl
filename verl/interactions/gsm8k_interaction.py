@@ -53,7 +53,7 @@ class Gsm8kInteraction(BaseInteraction):
         return instance_id
 
     async def generate_response(
-        self, instance_id: str, content, output, **kwargs
+        self, instance_id: str, content, **kwargs
     ) -> tuple[bool, str, float, dict]:
         """
         content = ""
