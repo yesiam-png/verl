@@ -359,6 +359,7 @@ class DataParallelPPOActor(BasePPOActor):
                 max_turns = masked_turn_ids.max().item() if masked_turn_ids.numel() > 0 else 0
                 
                 masked_log_probs = prob * gt_mask
+
                 turn_sums = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=log_probs.dtype)
                 turn_counts = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=gt_mask.dtype)
                # """
@@ -407,25 +408,29 @@ class DataParallelPPOActor(BasePPOActor):
                 format_mask = (format_reward > 0.5)            # dtype: bool, same shape as format
                 turn_means = turn_means.masked_fill(~format_mask, 0.0)
 
-              #  """
-                window = 5
+            #    total_return = torch.sum(turn_means[:, 1:], dim=-1) / model_inputs["num_turns"]  # newly added
+
+             #  """
+                window = 4
                 x = turn_means.unsqueeze(1)               # → [B,1,L]
                 x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
                 kernel = torch.ones(1, 1, window, dtype=x.dtype, device=x.device)
                 #  turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
-                mask_ones = torch.ones_like(x)
+              ### mask_ones = torch.ones_like(x)
+                mask_ones = (torch.arange(x.size(-1), device=x.device)[None, :] <= model_inputs["num_turns"][:, None]).to(x.dtype).unsqueeze(1)
                 mask_ones_padded = F.pad(mask_ones, (0, window - 1))
                 sum_window = F.conv1d(x_padded, kernel)          # sums over available elements
                 cnt_window = F.conv1d(mask_ones_padded, kernel)          # counts of real elements (no zeros)
 
-
-                turn_means = (sum_window / cnt_window.clamp_min(1e-8)).squeeze(1)  # [B, L]
-            #    """
+                turn_means = (sum_window / cnt_window.clamp_min(1)).squeeze(1)  # [B, L]
+                turn_means[:, 0] = 0.0
+              #  """
                 # 5. Scatter the means back to a sequence-shaped tensor
                 # First, map the mean of a turn to every token in that turn
                 per_token_means = torch.gather(turn_means, 1, masked_turn_ids)
                 # Then, create the sparse reward tensor by only keeping values at turn starts
                 reward_scores = (per_token_means * turn_starts).detach()
+            ##    reward_scores = (total_return[:, None] * turn_starts).detach()
 
             num_turns = model_inputs["num_turns"]
             true_means_lst.append(torch.sum(turn_means, dim=-1) / num_turns)# nonzero_counts)

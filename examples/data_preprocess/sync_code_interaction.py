@@ -127,9 +127,9 @@ if __name__ == "__main__":
             question = system_prompt + question_raw
 
             split_lines = split_on_code_line(question)
-            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
+            split_lines[0] = split_lines[0] + split_lines[1]
             del split_lines[1]
-            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
+            split_lines[0] = split_lines[0] + split_lines[1]
             del split_lines[1]
 
             answer_raw = ""
