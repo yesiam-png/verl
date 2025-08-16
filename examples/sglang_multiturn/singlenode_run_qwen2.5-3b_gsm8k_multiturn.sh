@@ -43,14 +43,14 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt-aug16' \
-    trainer.experiment_name='realdata-len16-1e2ntp-noentropy-5window-nobonus' \
+    trainer.experiment_name='realdata-len16-1e2ntp-noentropy-5window-11bonus' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
     trainer.save_freq=50 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
-    data.train_files=/root/data/real_code/train_0.parquet \
+    data.train_files=/root/data/real_code \
     data.val_files=/root/data/real_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
     actor_rollout_ref.rollout.multi_turn.max_user_turns=1 \

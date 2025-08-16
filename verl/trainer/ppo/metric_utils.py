@@ -71,14 +71,7 @@ def extract_first_sequence(token_ids, diffs):
     if len(starts) == 0:
         return torch.tensor([], dtype=token_ids.dtype)
 
-    # Get the start of the first sequence and its corresponding end
-    first_start_idx = starts[0]
-    first_end_idx = ends[0]
-
-    second_start_idx = starts[6]
-    second_end_idx = ends[6]
-
-    return token_ids[first_start_idx:first_end_idx], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]],  token_ids[ends[0]:starts[1]], token_ids[ends[1]:starts[2]], token_ids[ends[2]:starts[3]]
+    return token_ids[starts[5]:ends[5]], token_ids[starts[6]:ends[6]], token_ids[starts[7]:ends[7]], token_ids[starts[8]:ends[8]],  token_ids[ends[5]:starts[6]], token_ids[ends[6]:starts[7]], token_ids[ends[7]:starts[8]]
 
 def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     """

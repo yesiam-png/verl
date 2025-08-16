@@ -82,7 +82,7 @@ class Gsm8kInteraction(BaseInteraction):
        # elif content == "\n":
        #     reward = 0.5 
         elif content.strip() == "":
-            reward = 1.0
+            reward = 1.1
             """
             print("succces!")
             visible = (
