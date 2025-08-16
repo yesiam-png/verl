@@ -154,7 +154,7 @@ if __name__ == "__main__":
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
 
-    for i in range(40):  # 256
+    for i in range(50):  # 256
         input_parquet = f"s3://afm-common-permanent/shenao_zhang/small_20b_python_data/256small-python-train-part{i:03}.parquet"
         dataset = datasets.load_dataset("parquet", data_files={"train": input_parquet})
         train_dataset = dataset["train"]
@@ -166,7 +166,7 @@ if __name__ == "__main__":
 
         train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
         train_dataset = train_dataset.filter(lambda ex: len(ex["split_lines"]) > 1)
-        train_dataset = train_dataset.filter(lambda ex: len(ex["split_lines"]) <= 64)
+        train_dataset = train_dataset.filter(lambda ex: len(ex["split_lines"]) <= 32)
         train_dataset.to_parquet(os.path.join(local_dir, f"train_{i}.parquet"))
 
         if hdfs_dir is not None:

@@ -37,7 +37,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n=5 \
     actor_rollout_ref.rollout.temperature=1.0 \
     +actor_rollout_ref.rollout.per_turn_response_length=16 \
-    +actor_rollout_ref.rollout.max_code_lines=64 \
+    +actor_rollout_ref.rollout.max_code_lines=32 \
     actor_rollout_ref.rollout.response_length=2048 \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
