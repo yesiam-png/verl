@@ -32,15 +32,10 @@ def extract_solution(solution_str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--local_dir", default="~/data/sync_code")
+    parser.add_argument("--local_dir", default="~/data/real_code")
     parser.add_argument("--hdfs_dir", default=None)
 
     args = parser.parse_args()
-
-    data_source = "OpenCoder-LLM/opc-annealing-corpus"
-    dataset = datasets.load_dataset(data_source, "algorithmic_corpus")
-
-    train_dataset = dataset["train"]
 
     def split_on_code_line(code_text: str, comment_char: str = '#', block_delimiters=('"""', "'''")) -> list[str]:
         """
@@ -120,22 +115,22 @@ if __name__ == "__main__":
                 last_fence = fence_idxs[-1]
                 no_asserts = no_asserts[: last_fence + 1]
             question_raw = "\n".join(no_asserts)
-
-            system_prompt = "For each upcoming section of code, either provide a concise comment explaining it, OR directly skip to the next line."
+            system_prompt = ""
+            #system_prompt = "For each upcoming section of code, either provide a concise comment explaining it, OR directly skip to the next line."
 #            system_prompt = "After each <eol>, either provide a concise comment explaining the purpose and logic of the upcoming section of code, OR directly skip to the next line."
           #  system_prompt = "Generate either a comment to explain the next several lines of code, or skip directly to the next line."
             question = system_prompt + question_raw
 
             split_lines = split_on_code_line(question)
-            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
-            del split_lines[1]
-            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
-            del split_lines[1]
+      #      split_lines[0] = split_lines[0] + "\n" + split_lines[1]
+      #      del split_lines[1]
+      #      split_lines[0] = split_lines[0] + "\n" + split_lines[1]
+      #      del split_lines[1]
 
             answer_raw = ""
             solution = ""
             data = {
-                "data_source": data_source,
+                "data_source": "",
                 "prompt": question,
                 "split_lines": split_lines,
                 "ability": "math",
@@ -155,18 +150,23 @@ if __name__ == "__main__":
             return data
 
         return process_fn
-    train_dataset = train_dataset.filter(lambda example: example["lang"]=="python")
-    test_dataset = train_dataset.select(range(10))
-
-    train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
-    test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
-
+    
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
 
-    train_dataset.to_parquet(os.path.join(local_dir, "train.parquet"))
-    test_dataset.to_parquet(os.path.join(local_dir, "test.parquet"))
+    for i in range(5):  # 256
+        input_parquet = f"s3://afm-common-permanent/shenao_zhang/small_20b_python_data/256small-python-train-part{i:03}.parquet"
+        dataset = datasets.load_dataset("parquet", data_files={"train": input_parquet})
+        train_dataset = dataset["train"]
 
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
-        copy(src=local_dir, dst=hdfs_dir)
+        if i == 0:
+            test_dataset = train_dataset.select(range(10))
+            test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
+            test_dataset.to_parquet(os.path.join(local_dir, "test.parquet"))
+
+        train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
+        train_dataset.to_parquet(os.path.join(local_dir, f"train_{i}.parquet"))
+
+        if hdfs_dir is not None:
+            makedirs(hdfs_dir)
+            copy(src=local_dir, dst=hdfs_dir)
