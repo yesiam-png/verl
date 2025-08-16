@@ -109,7 +109,7 @@ def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     try:
         if tokenizer:
             first_res, second_res, third_res, fourth_res, second_prompt, third_prompt, fourth_prompt = extract_first_sequence(batch.batch["responses"][0], diffs[0])
-            print("first_prompt:", tokenizer.decode(batch.batch["prompts"][0].tolist()), "end1prompt")
+            print("first_prompt:", tokenizer.decode(batch.batch["prompts"][0].tolist(), skip_special_tokens=True), "end1prompt")
             print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
             print("second_prompt:", tokenizer.decode(second_prompt.tolist()), "end2prompt")
             print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
