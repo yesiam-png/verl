@@ -166,6 +166,7 @@ if __name__ == "__main__":
 
         train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
         train_dataset = train_dataset.filter(lambda ex: len(ex["split_lines"]) > 1)
+        train_dataset = train_dataset.filter(lambda ex: len(ex["split_lines"]) <= 64)
         train_dataset.to_parquet(os.path.join(local_dir, f"train_{i}.parquet"))
 
         if hdfs_dir is not None:
