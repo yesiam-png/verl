@@ -77,27 +77,8 @@ class Gsm8kInteraction(BaseInteraction):
         """
      #   response = self._instance_dict[instance_id]["ground_truth"]
      #   assert "\n" not in content
-        if (content.lstrip().startswith("#")):
+        if (content.lstrip(' ').startswith("\n") and content.endswith("\n")):
             reward = 1.0
-       # elif content == "\n":
-       #     reward = 0.5 
-        elif content.strip() == "":
-            reward = 1.0
-            """
-            print("succces!")
-            visible = (
-                content.replace(" ", "·")
-                .replace("\t", "↹")
-                .replace("\n", "\\n\n")
-            )
-            print("bbb", visible, "eee")
-            visible_2 = (
-                output.replace(" ", "·")
-                .replace("\t", "↹")
-                .replace("\n", "\\n\n")
-            )
-            print("output", visible_2, "eoo")
-            """
         else:
             reward = 0.0
         should_terminate_sequence = False

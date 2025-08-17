@@ -244,7 +244,7 @@ def compute_gae_advantage_return(
 # NOTE(sgm): this implementation only consider outcome supervision, where the reward is a scalar.
 @register_adv_est(AdvantageEstimator.GRPO)  # or simply: @register_adv_est("grpo")
 def compute_grpo_outcome_advantage(
-    reward_scores: torch.Tensor,
+    scores: torch.Tensor,
   #  token_level_rewards: torch.Tensor,
     responses: torch.Tensor,
     response_mask: torch.Tensor,
@@ -252,7 +252,7 @@ def compute_grpo_outcome_advantage(
     epsilon: float = 1e-6,
     norm_adv_by_std_in_grpo: bool = True,
     config: Optional[AlgoConfig] = None,
-    turn_starts_: Optional[torch.Tensor] = None,
+   # turn_starts_: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute advantage for GRPO, operating only on Outcome reward
@@ -282,111 +282,32 @@ def compute_grpo_outcome_advantage(
         Returns: `(torch.Tensor)`
             shape is (bs, response_length)
     """
-  #  scores_t = token_level_rewards.sum(dim=-1)
- #   scores = torch.tensor(reward_scores, dtype=torch.float32)
-    
-  #  num_mismatches = (scores_t != scores).sum().item()
-  #  print(f"Number of mismatched elements: {num_mismatches}")
-  #  #assert torch.equal(scores_t, scores)
-
     id2score = defaultdict(list)
     id2mean = {}
     id2std = {}
-    ids2turns = defaultdict(list)
-    id2n = defaultdict(list)
-
-    #responses_list = defaultdict(list)
-    #from transformers import AutoTokenizer
-    #tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
 
     with torch.no_grad():
-      #  print("before", reward_scores[0][:50])
-      #  print("response_mask", response_mask[0][:50])
-
-        bsz = reward_scores.shape[0]
-        length = reward_scores.shape[1]
+        bsz = scores.shape[0]
         for i in range(bsz):
-            id2score[index[i]].append(reward_scores[i])
-            ids2turns[index[i]].append(turn_starts_[i])
-     #       responses_list[index[i]].append(responses[i])
-        for i, idx in enumerate(id2score):
-            """
-            if i <= 2:
-                print(f"Group {idx} has {len(id2score[idx])} responses:")
-                for rew, response in zip(id2score[idx], responses_list[idx]):
-                    response_text = tokenizer.decode(response, skip_special_tokens=True)
-       #             print(f"Score is {rew}. for  Response: {response_text}")
-            """
+            id2score[index[i]].append(scores[i])
+        for idx in id2score:
             if len(id2score[idx]) == 1:
                 id2mean[idx] = torch.tensor(0.0)
                 id2std[idx] = torch.tensor(1.0)
             elif len(id2score[idx]) > 1:
-                concat_score = torch.stack(id2score[idx], dim=0)
-                concat_turns = torch.stack(ids2turns[idx], dim=0)
-
-                nonzero_counts = concat_turns.sum(dim=1)
-                valid_counts = nonzero_counts[nonzero_counts > 0]
-           #     if len(valid_counts) == 0:
-           #         return torch.empty(concat_score.shape[0], 0)
-                n = int(valid_counts.min().item())
-              #  print("vali", n, valid_counts)
-                indices = concat_turns.long().argsort(dim=1, descending=True, stable=True)
-              #  print("concat_turns", concat_turns)
-              #  print("indices", indices.size(), indices)
-              #  print("concat_score", concat_score.size(), concat_score)
-                nonzero_concat_score = concat_score.gather(dim=1, index=indices)[:, :n]
-
-              #  print("nonzero_concat_score", nonzero_concat_score.size(), nonzero_concat_score[:, :30]). # 5, 1024
-              #  nonzero_concat_score = nonzero_concat_score[:, :n]
-              #  print("nonzero_concat_score_after", nonzero_concat_score.size(), nonzero_concat_score[:, :30]) # 5, 19
-
-                id2mean[idx] = torch.mean(nonzero_concat_score, dim=0)
-                id2std[idx] = torch.std(nonzero_concat_score, dim=0)
-                id2n[idx] = n
+                scores_tensor = torch.stack(id2score[idx])
+                id2mean[idx] = torch.mean(scores_tensor)
+                id2std[idx] = torch.std(scores_tensor)
             else:
                 raise ValueError(f"no score in prompt index: {idx}")
-       # """
-        indices = turn_starts_.long().argsort(dim=1, descending=True, stable=True)
-        all_nonzero_concat_score = reward_scores.gather(dim=1, index=indices)
-        norm_reward = [] #torch.zeros_like(reward_scores)
         for i in range(bsz):
-            n = id2n[index[i]]
-          #  """
             if norm_adv_by_std_in_grpo:
-                temp = (all_nonzero_concat_score[i, :n] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
+                scores[i] = (scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
             else:
-                temp = all_nonzero_concat_score[i, :n] - id2mean[index[i]]
-          #  """
-          #  temp = all_nonzero_concat_score[i, :n]
-            target_indices = indices[i, :n]
-            output = torch.zeros(
-                (1, length), 
-                dtype=all_nonzero_concat_score.dtype, 
-                device=all_nonzero_concat_score.device
-            ).squeeze()
-            output.scatter_(dim=-1, index=target_indices, src=temp)
-            norm_reward.append(output)
-       # """
-        norm_reward = torch.stack(norm_reward, dim=0)
-      #  print("stack", len(id2score), torch.stack(id2score[index[0]], dim=0).size(), torch.stack(id2score[index[0]], dim=0)[:, :50])
-      #  print("mememean", id2mean[index[0]].size(), id2mean[index[0]][:50])
-      #  print("norm_reward", norm_reward.size(), reward_scores.size(), norm_reward[0][:50])
-        T_rev = torch.flip(norm_reward, dims=[1])
-        # Create a mask for non-zero values
-        mask = T_rev != 0
-        # Create column indices
-        cols = torch.arange(T_rev.shape[1], device=reward_scores.device)
-        # Where mask is False, index is 0, otherwise it's the column index
-        idx = torch.where(mask, cols, torch.tensor(0, device=reward_scores.device))
-        # Use cumulative max to forward-propagate the last valid index
-        idx_ffill = torch.cummax(idx, dim=1)[0]
-        # Gather the values from the reversed tensor using the filled indices
-        T_rev_filled = torch.gather(T_rev, 1, idx_ffill)
-        # Reverse the result back to the original order
-        norm_reward = torch.flip(T_rev_filled, dims=[1])
-        norm_reward = norm_reward * response_mask
-      #  print("last", norm_reward[0][:50])
-    return norm_reward.detach(), norm_reward.detach()
+                scores[i] = scores[i] - id2mean[index[i]]
+        scores = scores.unsqueeze(-1) * response_mask
+
+    return scores.detach(), scores.detach()
 
 
 @register_adv_est(AdvantageEstimator.GRPO_PASSK)  # or simply: @register_adv_est("grpo_passk")

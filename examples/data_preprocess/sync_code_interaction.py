@@ -56,7 +56,7 @@ if __name__ == "__main__":
             A list of strings, where each element is a block of comments,
             blank lines, and the single line of code that follows it.
         """
-        lines = code_text.splitlines(keepends=True) # no \n in it!!!
+        lines = code_text.splitlines(keepends=False) # no \n in it!!!
         if not lines:
             return []
 
@@ -127,9 +127,9 @@ if __name__ == "__main__":
             question = system_prompt + question_raw
 
             split_lines = split_on_code_line(question)
-            split_lines[0] = split_lines[0] + split_lines[1]
+            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
             del split_lines[1]
-            split_lines[0] = split_lines[0] + split_lines[1]
+            split_lines[0] = split_lines[0] + "\n" + split_lines[1]
             del split_lines[1]
 
             answer_raw = ""

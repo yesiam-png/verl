@@ -329,121 +329,27 @@ class DataParallelPPOActor(BasePPOActor):
         log_probs_lst = []
         entropy_lst = []
         reward_lst = []
-        true_means_lst = []
-        turn_starts_lst = []
-        next_line_prob_lst = []
        # from transformers import AutoTokenizer
        # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B", trust_remote_code=True)
         for mini_iter, micro_batch in enumerate(micro_batches):
             model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
             response_attention_mask = model_inputs["response_attention_mask"]
             response_mask = model_inputs["response_mask"]
-            response_ids = model_inputs["responses"]
             with torch.no_grad():
                 entropy, log_probs = self._forward_micro_batch(
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
                 prob = torch.exp(log_probs)
-                #after_last_mask = (response_mask.flip(-1).cumsum(-1) == 0).flip(-1)  # only attend to the last turn of gt text
                 gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)               
-                padded_mask = F.pad(gt_mask, (1, 0), "constant", 0)
-                # A turn starts where the mask changes from 0 to 1
-                turn_starts = (padded_mask[:, 1:] - padded_mask[:, :-1] == 1).float()
-
-                # 2. Create a unique ID for each turn in each batch sample
-                turn_ids = torch.cumsum(turn_starts, dim=-1)
-                masked_turn_ids = (turn_ids * gt_mask).long()
-
-                # 3. Use scatter_add_ for segmented sum to get per-turn sums and counts
-                batch_size = prob.shape[0]
-                max_turns = masked_turn_ids.max().item() if masked_turn_ids.numel() > 0 else 0
                 
-                masked_log_probs = prob * gt_mask
-
-                turn_sums = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=log_probs.dtype)
-                turn_counts = torch.zeros(batch_size, max_turns + 1, device=log_probs.device, dtype=gt_mask.dtype)
-               # """
-                batch_size, N = masked_turn_ids.shape
-                tid1_list = [] 
-                tid2_list = []
-                #res_0_list = []
-                res_1_list = []
-                res_2_list = []
-                count1 = 0
-                response_length_mine = model_inputs["responses"].size(-1)
-                for n in range(N):
-                    tid = masked_turn_ids[0, n].item()
-                  #  if tid == 2:
-                  #      res_0_list.append(response_ids[0, n].item())
-                    if tid == 1:
-                    #    if count1 == 0 or count1 == 1 or count1 == 2 or count1 == 3:
-                    #        print("symbolinfirst", tokenizer.decode([response_ids[0, n].item()]), "endfirst")
-                        tid1_list.append((masked_log_probs[0, n]).item())
-                        res_1_list.append(response_ids[0, n].item())
-                        count1 = n + 1
-                    if tid == 6:
-                   #     if count2 == 0 :
-                   #         print("symbolinsix", response_ids[0, n].item(), "endsix")
-                        tid2_list.append((masked_log_probs[0, n]).item())
-                        res_2_list.append(response_ids[0, n].item())
+                token_means = torch.sum(prob * gt_mask, dim=-1) / gt_mask.sum(dim=-1).clamp_min(1.0)
                 
-                if (mini_iter == 0 or mini_iter == 1):
-                  #  """
-                    if not calculate_entropy:
-                        print("tid1: ", tid1_list, "endtid1")
-                        print("tid6: ", tid2_list, "endtid6")
-
-                turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
-                turn_counts.scatter_add_(1, masked_turn_ids, gt_mask)
-
-                format_reward = model_inputs["format_reward"]
-             #   print("deeeebug", turn_means.size(), turn_means)
-             #   print("format_reward", format_reward.shape, format_reward)
-                format_reward = format_reward[:, :max_turns].to(turn_starts.device)
-                format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
-
-                turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
-
-                turn_means = turn_means_noformat + format_reward - torch.ones_like(format_reward)
-                format_mask = (format_reward > 0.5)            # dtype: bool, same shape as format
-                turn_means = turn_means.masked_fill(~format_mask, 0.0)
-
-            #    total_return = torch.sum(turn_means[:, 1:], dim=-1) / model_inputs["num_turns"]  # newly added
-
-             #  """
-                window = 4
-                x = turn_means.unsqueeze(1)               # → [B,1,L]
-                x_padded = F.pad(x, (0, window-1))  # → [B,1,L + window-1]
-                kernel = torch.ones(1, 1, window, dtype=x.dtype, device=x.device)
-                #  turn_means = F.conv1d(x_padded, kernel).squeeze(1)      # → [B,1,(L+window-1)−window+1] = [B,L]
-              ### mask_ones = torch.ones_like(x)
-                mask_ones = (torch.arange(x.size(-1), device=x.device)[None, :] <= model_inputs["num_turns"][:, None]).to(x.dtype).unsqueeze(1)
-                mask_ones_padded = F.pad(mask_ones, (0, window - 1))
-                sum_window = F.conv1d(x_padded, kernel)          # sums over available elements
-                cnt_window = F.conv1d(mask_ones_padded, kernel)          # counts of real elements (no zeros)
-
-                turn_means = (sum_window / cnt_window.clamp_min(1)).squeeze(1)  # [B, L]
-                turn_means[:, 0] = 0.0
-              #  """
-                # 5. Scatter the means back to a sequence-shaped tensor
-                # First, map the mean of a turn to every token in that turn
-                per_token_means = torch.gather(turn_means, 1, masked_turn_ids)
-                # Then, create the sparse reward tensor by only keeping values at turn starts
-                reward_scores = (per_token_means * turn_starts).detach()
-            ##    reward_scores = (total_return[:, None] * turn_starts).detach()
-
-            num_turns = model_inputs["num_turns"]
-            true_means_lst.append(torch.sum(turn_means, dim=-1) / num_turns)# nonzero_counts)
-
             log_probs_lst.append(log_probs)
-            reward_lst.append(reward_scores)
-            turn_starts_lst.append(turn_starts)
+            reward_lst.append(token_means)
             if calculate_entropy:
                 entropy_lst.append(entropy)
-        true_means_ = torch.concat(true_means_lst, dim=0)
         reward_scores = torch.concat(reward_lst, dim=0)
         log_probs = torch.concat(log_probs_lst, dim=0)
-        turn_starts_ = torch.concat(turn_starts_lst, dim=0)
         entropys = None
         if calculate_entropy:
             entropys = torch.concat(entropy_lst, dim=0)
@@ -451,12 +357,10 @@ class DataParallelPPOActor(BasePPOActor):
         if use_dynamic_bsz:
             log_probs = restore_dynamic_batch(log_probs, batch_idx_list)
             reward_scores = restore_dynamic_batch(reward_scores, batch_idx_list)
-            true_means_ = restore_dynamic_batch(true_means_, batch_idx_list)
-            turn_starts_ = restore_dynamic_batch(turn_starts_, batch_idx_list)
             if calculate_entropy:
                 entropys = restore_dynamic_batch(entropys, batch_idx_list)
         
-        return log_probs, entropys, reward_scores, true_means_, turn_starts_ #, advantages
+        return log_probs, entropys, reward_scores#, true_means_, turn_starts_ #, advantages
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):
