@@ -340,8 +340,25 @@ class DataParallelPPOActor(BasePPOActor):
                     model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                 )
                 prob = torch.exp(log_probs)
-                gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)               
-                
+                gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
+
+                gt_mask = gt_mask.bool()
+                B, L = gt_mask.shape
+                # Start-of-run detector: 1 where a run of ones begins
+                prev = torch.zeros(B, 1, dtype=torch.bool, device=gt_mask.device)
+                prev = torch.cat([prev, gt_mask[:, :-1]], dim=1)
+                starts = gt_mask & ~prev
+                # Segment id per position (0-based inside runs, -1 outside runs)
+                seg_id = starts.long().cumsum(dim=1) - 1
+                # Gather the right value per position and zero out non-mask spots
+                idx = seg_id.clamp(min=0)                       # avoid negative gather
+                picked = model_inputs["format_reward"].gather(1, idx)                  # (B, L)
+                format_reward = torch.where(gt_mask, picked, torch.zeros_like(picked))       
+
+                prob = prob + format_reward - torch.ones_like(format_reward)
+                format_mask = (format_reward < 0.5)            # dtype: bool, same shape as format
+                prob = prob.masked_fill(format_mask, 0.0)
+
                 token_means = torch.sum(prob * gt_mask, dim=-1) / gt_mask.sum(dim=-1).clamp_min(1.0)
                 
             log_probs_lst.append(log_probs)
