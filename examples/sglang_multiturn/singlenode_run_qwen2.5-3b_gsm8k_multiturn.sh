@@ -19,7 +19,7 @@ python3 -m verl.trainer.main_ppo \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
     actor_rollout_ref.model.path=Qwen/Qwen2.5-3B \
-    +actor_rollout_ref.actor.ntp_coeff=1e-2 \
+    +actor_rollout_ref.actor.ntp_coeff=5e-2 \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
@@ -43,11 +43,11 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt-aug16-modellearnn' \
-    trainer.experiment_name='std-window3-modellearnn-1e2ntp-noentropy-nobonus' \
+    trainer.experiment_name='wramup-std-window3-modellearnn-5e2ntp-noentropy-nobonus' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
-    trainer.save_freq=25 \
+    trainer.save_freq=50 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
     data.train_files=/root/data/sync_code/train.parquet \
