@@ -1305,12 +1305,12 @@ class RayPPOTrainer:
                         )  # GRPO adv normalization factor
                         reward_scores_copy = batch.batch["reward_scores"].clone()
                         advantages, returns = core_algos.compute_grpo_outcome_advantage(
-                            scores=reward_scores_copy,
+                            reward_scores=reward_scores_copy,
                             responses=batch.batch["responses"],
                             response_mask=batch.batch["response_mask"],
                             index=batch.non_tensor_batch["uid"],
                             norm_adv_by_std_in_grpo=True,
-                         #   turn_starts_=batch.batch["turn_starts_"]
+                            turn_starts_=batch.batch["turn_starts_"]
                         )
                         batch.batch["advantages"] = advantages
 

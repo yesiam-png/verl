@@ -43,7 +43,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='rl-code-cpt-aug16-modellearnn' \
-    trainer.experiment_name='std-meantokens-modellearnn-1e2ntp-noentropy-nobonus' \
+    trainer.experiment_name='std-window3-modellearnn-1e2ntp-noentropy-nobonus' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
