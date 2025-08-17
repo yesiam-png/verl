@@ -503,7 +503,8 @@ class DataParallelPPOActor(BasePPOActor):
                     response_attention_mask = model_inputs["response_attention_mask"]
                     gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)   
                     ntp_loss = agg_loss(loss_mat=log_prob, loss_mask=gt_mask, loss_agg_mode=loss_agg_mode)
-                    policy_loss = policy_loss - ntp_loss * self.config.ntp_coeff
+                    wramup_ratio = min(1.0, data.meta_info["global_steps"] / 100)
+                    policy_loss = policy_loss - ntp_loss * self.config.ntp_coeff * wramup_ratio
                     micro_batch_metrics.update({"critic/ntp_loss/mean": -ntp_loss.detach().item()})
 
                     if self.config.use_kl_loss:
