@@ -1167,9 +1167,10 @@ class RayPPOTrainer:
                     and self.global_steps % ref_update_freq == 0
                 ):
                     print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
-                    actor_state_path = "/tmp/actor_state_mid"  # Temporary path
+                    actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/ckpts/step_{self.global_steps}"  # Temporary path
                     self.actor_rollout_wg.save_checkpoint(actor_state_path)
-                    self.ref_policy_wg.load_checkpoint(actor_state_path, None, False)
+                    
+                    self.ref_policy_wg.init_model(ref_path=actor_state_path+"/huggingface")
 
                     print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
                 if self.global_steps % ref_update_freq <= self.config.trainer.get("q_step", -1):

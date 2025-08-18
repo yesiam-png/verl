@@ -560,7 +560,9 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         return rollout, rollout_sharding_manager
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def init_model(self):
+    def init_model(self, ref_path=None):
+        if ref_path:
+            assert self._is_ref
         from verl.workers.actor import DataParallelPPOActor
 
         # This is used to import external_lib into the huggingface systems
@@ -628,7 +630,10 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             )
 
         if self._is_ref:
-            local_path = copy_to_local(self.config.model.path, use_shm=use_shm)
+            if not ref_path:
+                local_path = copy_to_local(self.config.model.path, use_shm=use_shm)
+            else:
+                local_path = ref_path
             self.ref_module_fsdp = self._build_model_optimizer(
                 model_path=local_path,
                 fsdp_config=self.config.ref.fsdp_config,
@@ -933,10 +938,10 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def load_checkpoint(self, local_path, hdfs_path=None, del_local_after_load=False):
-    #    assert self._is_actor or (not self._is_actor and self._is_rollout), (
-    #        f"Checkpoint loading is only supported for Actor or standalone Rollout Workers, but got "
-    #        f"{self._is_actor} and {self._is_rollout}"
-    #    )
+        assert self._is_actor or (not self._is_actor and self._is_rollout), (
+            f"Checkpoint loading is only supported for Actor or standalone Rollout Workers, but got "
+            f"{self._is_actor} and {self._is_rollout}"
+        )
 
         if self._is_offload_param:
             load_fsdp_model_to_gpu(self.actor_module_fsdp)
