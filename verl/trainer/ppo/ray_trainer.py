@@ -1123,6 +1123,7 @@ class RayPPOTrainer:
         self.max_steps_duration = 0
 
         for epoch in range(self.config.trainer.total_epochs):
+            batch_list = []
             for batch_dict in self.train_dataloader:
                 metrics = {}
                 timing_raw = {}
@@ -1155,12 +1156,29 @@ class RayPPOTrainer:
                 if "split_lines" in batch.non_tensor_batch:
                     non_tensor_batch_keys_to_pop.append("split_lines")
 
+                q_steps = self.config.trainer.get("q_step", -1)
+                ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
+                self.inference_ready = False
+                print("global_steps", self.global_steps)
+                if self.global_steps % ref_update_freq < q_steps:
+                    self.training_q = True
+                else:
+                    self.training_q = False
+                    batch_list.append(batch)
+                    if self.global_steps % ref_update_freq == (ref_update_freq - 1):
+                        batch = batch.concat(batch_list)
+                        batch_list = []
+                        self.inference_ready = True
+                    else:
+                        progress_bar.update(1)
+                        self.global_steps += 1
+                        continue
+
                 gen_batch = batch.pop(
                     batch_keys=batch_keys_to_pop,
                     non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
                 )
 
-                ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
                 if (
                     self.use_reference_policy
                     and ref_update_freq > 0
@@ -1173,10 +1191,6 @@ class RayPPOTrainer:
                     self.ref_policy_wg.init_model(ref_path=actor_state_path+"/huggingface")
 
                     print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
-                if self.global_steps % ref_update_freq < self.config.trainer.get("q_step", -1):
-                    self.training_q = True
-                else:
-                    self.training_q = False
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
                 gen_batch.meta_info["training_q"] = self.training_q
@@ -1190,6 +1204,7 @@ class RayPPOTrainer:
                     # generate a batch
                     with marked_timer("gen", timing_raw, color="red"):
                         assert "split_lines" in gen_batch.non_tensor_batch
+                        print("lenen", len(gen_batch))
                         if not self.async_rollout_mode:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
@@ -1220,7 +1235,7 @@ class RayPPOTrainer:
                     batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
                     batch.meta_info["global_steps"] = self.global_steps
 
-                    if not self.training_q:
+                    if not self.training_q and self.inference_ready:
                         # update actor
                         with marked_timer("update_actor", timing_raw, color="red"):
                             actor_output = self.actor_rollout_wg.update_actor_ntp(batch)

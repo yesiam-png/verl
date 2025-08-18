@@ -543,7 +543,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             if torch.distributed.get_world_size() == 1:
                 self.config.rollout.load_format = "dummy_hf"
             rollout_sharding_manager = FSDPSGLangShardingManager(
-                module=self.ref_module_fsdp, #self.actor_module_fsdp,
+                module=self.actor_module_fsdp,
                 inference_engine=rollout._engine,
                 model_config=self.actor_model_config,
                 rollout_config=self.config.rollout,
@@ -574,7 +574,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         use_shm = self.config.model.get("use_shm", False)
         use_fused_kernels = self.config.model.get("use_fused_kernels", False)
 
-        if self._is_actor:# or self._is_rollout:
+        if self._is_actor or self._is_rollout:
             # we need the model for actor and rollout
             if self._is_actor:
                 optim_config = self.config.actor.optim
@@ -624,18 +624,19 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 config=self.config.actor, actor_module=self.actor_module_fsdp, actor_optimizer=self.actor_optimizer
             )
 
-        if self._is_ref or self._is_rollout:
+        if self._is_rollout:
+            self.rollout, self.rollout_sharding_manager = self._build_rollout(
+                trust_remote_code=self.config.model.get("trust_remote_code", False)
+            )
+
+        if self._is_ref:
             if not ref_path:
                 local_path = copy_to_local(self.config.model.path, use_shm=use_shm)
             else:
                 local_path = ref_path
-            if self._is_rollout:
-                fsdp_config = OmegaConf.create()
-            else:
-                fsdp_config = self.config.ref.fsdp_config
             self.ref_module_fsdp = self._build_model_optimizer(
                 model_path=local_path,
-                fsdp_config=fsdp_config,
+                fsdp_config=self.config.ref.fsdp_config,
                 optim_config=None,
                 override_model_config=override_model_config,
                 use_remove_padding=use_remove_padding,
@@ -649,11 +650,6 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 self.config.ref.use_remove_padding = use_remove_padding
                 self.config.ref.use_fused_kernels = use_fused_kernels
             self.ref_policy = DataParallelPPOActor(config=self.config.ref, actor_module=self.ref_module_fsdp)
-        
-        if self._is_rollout:
-            self.rollout, self.rollout_sharding_manager = self._build_rollout(
-                trust_remote_code=self.config.model.get("trust_remote_code", False)
-            )
 
         if self._is_actor:
             self.flops_counter = FlopsCounter(self.actor_model_config)
@@ -671,7 +667,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
             checkpoint_contents = OmegaConf.create({"load_contents": ["model"], "save_contents": []})
             self.checkpoint_manager = FSDPCheckpointManager(
-                model=self.ref_module_fsdp, #self.actor_module_fsdp,
+                model=self.actor_module_fsdp,
                 optimizer=None,
                 lr_scheduler=None,
                 processing_class=self.processor if self.processor is not None else self.tokenizer,
