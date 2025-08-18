@@ -608,7 +608,7 @@ class DataParallelPPOActor(BasePPOActor):
         # make sure we are in training mode
         self.actor_module.train()
 
-        temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
+        temperature = 1.0 #data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
 
         select_keys = [
             "responses",
@@ -616,8 +616,6 @@ class DataParallelPPOActor(BasePPOActor):
             "input_ids",
             "attention_mask",
             "position_ids",
-            "old_log_probs",
-            "advantages",
             "response_attention_mask",
         ]
 
@@ -650,8 +648,9 @@ class DataParallelPPOActor(BasePPOActor):
                    # response_mask = model_inputs["response_mask"]
 
                     entropy, log_prob = self._forward_micro_batch(
-                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
+                        model_inputs, temperature=temperature, calculate_entropy=False
                     )
+                    loss_agg_mode = self.config.loss_agg_mode
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 

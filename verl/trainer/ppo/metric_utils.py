@@ -121,7 +121,7 @@ def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     )
 
 
-def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=None) -> dict[str, Any]:
+def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=None, ntp=False) -> dict[str, Any]:
     """
     Computes various metrics from a batch of data for PPO training.
 
@@ -147,6 +147,36 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=No
     """
   #  sequence_score = batch.batch["token_level_scores"].sum(-1)
   #  sequence_reward = batch.batch["token_level_rewards"].sum(-1)
+
+    if ntp:
+        response_info = _compute_response_info(batch, tokenizer)
+        prompt_length = response_info["prompt_length"]
+        response_length = response_info["response_length"]
+        metrics = {
+        #    "critic/format_reward/mean": torch.mean(format_reward).detach().item(),
+            **(
+                {
+                    # values
+                    "critic/values/mean": torch.mean(valid_values).detach().item(),
+                    "critic/values/max": torch.max(valid_values).detach().item(),
+                    "critic/values/min": torch.min(valid_values).detach().item(),
+                    # vf explained var
+                    "critic/vf_explained_var": (1.0 - return_diff_var / (return_var + 1e-5)).detach().item(),
+                }
+                if use_critic
+                else {}
+            ),
+            # response length
+            "response_length/mean": torch.mean(response_length).detach().item(),
+            "response_length/max": torch.max(response_length).detach().item(),
+            "response_length/min": torch.min(response_length).detach().item(),
+            # prompt length
+            "prompt_length/mean": torch.mean(prompt_length).detach().item(),
+            "prompt_length/max": torch.max(prompt_length).detach().item(),
+            "prompt_length/min": torch.min(prompt_length).detach().item(),
+        }
+        return metrics
+
     sequence_reward = batch.batch["turn_means"] #["reward_scores"]
     if "next_line_probs" in batch.batch:
         next_line_probs = batch.batch["next_line_probs"]

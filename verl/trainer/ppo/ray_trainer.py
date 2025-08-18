@@ -1220,9 +1220,39 @@ class RayPPOTrainer:
 
                     if not self.training_q:
                         # update actor
-                        actor_output = self.actor_rollout_wg.update_actor_ntp(batch)
+                        with marked_timer("update_actor", timing_raw, color="red"):
+                            actor_output = self.actor_rollout_wg.update_actor_ntp(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
+
+                        # Check if the ESI (Elastic Server Instance)/training plan is close to expiration.
+                        esi_close_to_expiration = should_save_ckpt_esi(
+                            max_steps_duration=self.max_steps_duration,
+                            redundant_time=self.config.trainer.esi_redundant_time,
+                        )
+                        # Check if the conditions for saving a checkpoint are met.
+                        # The conditions include a mandatory condition (1) and
+                        # one of the following optional conditions (2/3/4):
+                        # 1. The save frequency is set to a positive value.
+                        # 2. It's the last training step.
+                        # 3. The current step number is a multiple of the save frequency.
+                        # 4. The ESI(Elastic Server Instance)/training plan is close to expiration.
+                        if self.config.trainer.save_freq > 0 and (
+                            is_last_step
+                            or self.global_steps % self.config.trainer.save_freq == 0
+                            or esi_close_to_expiration
+                        ):
+                            if esi_close_to_expiration:
+                                print("Force saving checkpoint: ESI instance expiration approaching.")
+                            with marked_timer("save_checkpoint", timing_raw, color="green"):
+                                self._save_checkpoint()
+
+                        with marked_timer("stop_profile", timing_raw):
+                            self._stop_profiling(do_profile)
+
+#                        steps_duration = timing_raw["step"]
+#                        self.max_steps_duration = max(self.max_steps_duration, steps_duration)
+
                         # training metrics
                         metrics.update(
                             {
@@ -1231,11 +1261,19 @@ class RayPPOTrainer:
                             }
                         )
                         # collect metrics
-                        metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic, tokenizer=self.tokenizer))
+                        metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic, tokenizer=self.tokenizer, ntp=True))
                         metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
                         # TODO: implement actual tflpo and theoretical tflpo
-                        n_gpus = self.resource_pool_manager.get_n_gpus()
-                        metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+ #                       n_gpus = self.resource_pool_manager.get_n_gpus()
+#                        metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+                        if isinstance(self.train_dataloader.sampler, AbstractCurriculumSampler):
+                            self.train_dataloader.sampler.update(batch=batch)
+
+                        # TODO: make a canonical logger that supports various backend
+                        logger.log(data=metrics, step=self.global_steps)
+
+                        progress_bar.update(1)
+                        self.global_steps += 1
                         continue
                     #"""
                     with marked_timer("reward", timing_raw, color="yellow"):
