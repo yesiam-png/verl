@@ -1173,7 +1173,7 @@ class RayPPOTrainer:
                     self.ref_policy_wg.init_model(ref_path=actor_state_path+"/huggingface")
 
                     print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
-                if self.global_steps % ref_update_freq <= self.config.trainer.get("q_step", -1):
+                if self.global_steps % ref_update_freq < self.config.trainer.get("q_step", -1):
                     self.training_q = True
                 else:
                     self.training_q = False

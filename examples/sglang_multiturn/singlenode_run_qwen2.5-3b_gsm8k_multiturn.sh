@@ -45,8 +45,8 @@ python3 -m verl.trainer.main_ppo \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
-    trainer.project_name='rl-code-cpt-aug16-bs' \
-    trainer.experiment_name='em-bs512-nobonus' \
+    trainer.project_name='em' \
+    trainer.experiment_name='em-bs512-5e2ntp-40-100' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
@@ -54,7 +54,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
     +trainer.ref_update_freq=100 \
-    +trainer.q_trainer=20 \
+    +trainer.q_step=40 \
     data.train_files=/root/data/sync_code/train.parquet \
     data.val_files=/root/data/sync_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
