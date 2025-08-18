@@ -559,10 +559,55 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
         return rollout, rollout_sharding_manager
 
+    def _cleanup_existing_models(self):
+        """Clean up existing models and free GPU memory before initializing new ones."""
+        import torch
+        import gc
+        
+        # List of attributes that might hold model references
+        model_attrs = [
+            'actor_module_fsdp', 'actor_module', 'actor_optimizer', 'actor_lr_scheduler',
+            'ref_module_fsdp', 'ref_policy', 'actor', 'rollout', 'rollout_sharding_manager',
+            'checkpoint_manager', 'flops_counter'
+        ]
+        
+        for attr in model_attrs:
+            if hasattr(self, attr):
+                obj = getattr(self, attr)
+                if obj is not None:
+                    # For FSDP models, try to call cleanup methods
+                    if hasattr(obj, 'cleanup'):
+                        try:
+                            obj.cleanup()
+                        except Exception as e:
+                            logger.warning(f"Failed to cleanup {attr}: {e}")
+                    
+                    # For optimizers, clear state
+                    if hasattr(obj, 'state_dict') and hasattr(obj, 'zero_grad'):
+                        try:
+                            obj.zero_grad(set_to_none=True)
+                            if hasattr(obj, 'state'):
+                                obj.state.clear()
+                        except Exception as e:
+                            logger.warning(f"Failed to clear optimizer state for {attr}: {e}")
+                    
+                    # Delete the reference
+                    delattr(self, attr)
+                    del obj
+        
+        # Force garbage collection
+        gc.collect()
+        
+        # Clear GPU cache if available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        
+        log_gpu_memory_usage("After cleanup in init_model", logger=logger)
+
+
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def init_model(self, ref_path=None):
-        if ref_path:
-            assert self._is_ref
+    def init_model(self, anchor_path=None):
         from verl.workers.actor import DataParallelPPOActor
 
         # This is used to import external_lib into the huggingface systems
@@ -583,7 +628,11 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 optim_config = None
                 fsdp_config = OmegaConf.create()
 
-            local_path = copy_to_local(self.config.model.path, use_shm=use_shm)
+            if not anchor_path:
+                local_path = copy_to_local(self.config.model.path, use_shm=use_shm)
+            else:
+                local_path = anchor_path
+                self._cleanup_existing_models()
             (
                 self.actor_module_fsdp,
                 self.actor_optimizer,
@@ -630,10 +679,10 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             )
 
         if self._is_ref:
-            if not ref_path:
+            if not anchor_path:
                 local_path = copy_to_local(self.config.model.path, use_shm=use_shm)
             else:
-                local_path = ref_path
+                local_path = anchor_path
             self.ref_module_fsdp = self._build_model_optimizer(
                 model_path=local_path,
                 fsdp_config=self.config.ref.fsdp_config,

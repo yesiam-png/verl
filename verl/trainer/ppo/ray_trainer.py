@@ -1121,6 +1121,7 @@ class RayPPOTrainer:
         self.global_steps += 1
         last_val_metrics = None
         self.max_steps_duration = 0
+        self.anchor_path = None
 
         for epoch in range(self.config.trainer.total_epochs):
             batch_list = []
@@ -1175,12 +1176,15 @@ class RayPPOTrainer:
                     self.use_reference_policy
                     and ref_update_freq > 0
                     and self.global_steps % ref_update_freq == 0
+                    and self.global_step > 0
                 ):
                     print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
                     actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/ckpts/step_{self.global_steps}"  # Temporary path
                     self.actor_rollout_wg.save_checkpoint(actor_state_path)
+
+                    self.anchor_path = actor_state_path + "/huggingface"
                     
-                    self.ref_policy_wg.init_model(ref_path=actor_state_path+"/huggingface")
+                    self.ref_policy_wg.init_model(anchor_path=self.anchor_path)
 
                     print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
 
@@ -1211,6 +1215,11 @@ class RayPPOTrainer:
                             continue
 
                     if not self.training_q:
+                        self.global_steps -= (ref_update_freq - q_steps)
+                        if self.anchor_path is not None:
+                            self.actor_rollout_wg.init_model(anchor_path=self.anchor_path)
+                        else:
+                            self.actor_rollout_wg.init_model()
                         for batch, gen_batch_output in zip(batch_list, gen_batch_output_list):
                             batch.non_tensor_batch["uid"] = np.array(
                                 [str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object
@@ -1232,7 +1241,7 @@ class RayPPOTrainer:
                             batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
                             batch.meta_info["global_steps"] = self.global_steps
 
-                        #if not self.training_q and self.inference_ready:
+                         #if not self.training_q and self.inference_ready:
                             # update actor
                             with marked_timer("update_actor", timing_raw, color="red"):
                                 actor_output = self.actor_rollout_wg.update_actor_ntp(batch)
@@ -1264,8 +1273,8 @@ class RayPPOTrainer:
                             with marked_timer("stop_profile", timing_raw):
                                 self._stop_profiling(do_profile)
 
-    #                        steps_duration = timing_raw["step"]
-    #                        self.max_steps_duration = max(self.max_steps_duration, steps_duration)
+                            #steps_duration = timing_raw["step"]
+                            # self.max_steps_duration = max(self.max_steps_duration, steps_duration)
 
                             # training metrics
                             metrics.update(
@@ -1278,8 +1287,8 @@ class RayPPOTrainer:
                             metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic, tokenizer=self.tokenizer, ntp=True))
                             metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
                             # TODO: implement actual tflpo and theoretical tflpo
-    #                       n_gpus = self.resource_pool_manager.get_n_gpus()
-    #                        metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+                            # n_gpus = self.resource_pool_manager.get_n_gpus()
+                            # metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
                             if isinstance(self.train_dataloader.sampler, AbstractCurriculumSampler):
                                 self.train_dataloader.sampler.update(batch=batch)
 
@@ -1287,8 +1296,8 @@ class RayPPOTrainer:
                             logger.log(data=metrics, step=self.global_steps)
 
                             progress_bar.update(1)
-                            #self.global_steps += 1
-                        batch_list, gen_batch_output_list = [], []    
+                            self.global_steps += 1
+                        batch_list, gen_batch_output_list = [], []
                         continue
                     #"""
                     batch.non_tensor_batch["uid"] = np.array(
