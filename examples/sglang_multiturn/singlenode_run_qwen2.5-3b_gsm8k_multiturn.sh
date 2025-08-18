@@ -23,7 +23,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
-    +actor_rollout_ref.actor.ntp_mini_batch_size=256 \
+    +actor_rollout_ref.actor.ntp_mini_batch_size=512 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=40 \
     +actor_rollout_ref.actor.ntp_micro_batch_size_per_gpu=64 \
     actor_rollout_ref.actor.use_kl_loss=False \
@@ -46,15 +46,15 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em' \
-    trainer.experiment_name='em-bs256-5e2ntp-40-100-debug' \
+    trainer.experiment_name='em-bs512-5e2ntp-20-40-fixbug' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
     trainer.save_freq=20 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
-    +trainer.q_step=2 \
-    +trainer.ref_update_freq=6 \
+    +trainer.q_step=20 \
+    +trainer.ref_update_freq=40 \
     data.train_files=/root/data/sync_code/train.parquet \
     data.val_files=/root/data/sync_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \

@@ -1124,6 +1124,7 @@ class RayPPOTrainer:
 
         for epoch in range(self.config.trainer.total_epochs):
             batch_list = []
+            gen_batch_output_list = []
             for batch_dict in self.train_dataloader:
                 metrics = {}
                 timing_raw = {}
@@ -1158,21 +1159,12 @@ class RayPPOTrainer:
 
                 q_steps = self.config.trainer.get("q_step", -1)
                 ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
-                self.inference_ready = False
                 print("global_steps", self.global_steps)
                 if self.global_steps % ref_update_freq < q_steps:
                     self.training_q = True
                 else:
                     self.training_q = False
                     batch_list.append(batch)
-                    if self.global_steps % ref_update_freq == (ref_update_freq - 1):
-                        batch = batch.concat(batch_list)
-                        batch_list = []
-                        self.inference_ready = True
-                    else:
-                        progress_bar.update(1)
-                        self.global_steps += 1
-                        continue
 
                 gen_batch = batch.pop(
                     batch_keys=batch_keys_to_pop,
@@ -1191,6 +1183,7 @@ class RayPPOTrainer:
                     self.ref_policy_wg.init_model(ref_path=actor_state_path+"/huggingface")
 
                     print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
+
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
                 gen_batch.meta_info["training_q"] = self.training_q
@@ -1204,7 +1197,6 @@ class RayPPOTrainer:
                     # generate a batch
                     with marked_timer("gen", timing_raw, color="red"):
                         assert "split_lines" in gen_batch.non_tensor_batch
-                        print("lenen", len(gen_batch))
                         if not self.async_rollout_mode:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
@@ -1212,12 +1204,97 @@ class RayPPOTrainer:
                         timing_raw.update(gen_batch_output.meta_info["timing"])
                         gen_batch_output.meta_info.pop("timing", None)
 
+                    if not self.training_q:
+                        gen_batch_output_list.append(gen_batch_output)
+                        self.global_steps += 1
+                        if not self.global_steps % ref_update_freq == (ref_update_freq - 1):
+                            continue
+
+                    if not self.training_q:
+                        for batch, gen_batch_output in zip(batch_list, gen_batch_output_list):
+                            batch.non_tensor_batch["uid"] = np.array(
+                                [str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object
+                            )
+                            batch = batch.union(gen_batch_output)
+
+                            if "response_mask" not in batch.batch.keys():
+                                batch.batch["response_mask"] = compute_response_mask(batch)
+                            
+                            # Balance the number of valid tokens across DP ranks.
+                            # NOTE: This usually changes the order of data in the `batch`,
+                            # which won't affect the advantage calculation (since it's based on uid),
+                            # but might affect the loss calculation (due to the change of mini-batching).
+                            # TODO: Decouple the DP balancing and mini-batching.
+                            if self.config.trainer.balance_batch:
+                                self._balance_batch(batch, metrics=metrics)
+
+                            # compute global_valid tokens
+                            batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
+                            batch.meta_info["global_steps"] = self.global_steps
+
+                        #if not self.training_q and self.inference_ready:
+                            # update actor
+                            with marked_timer("update_actor", timing_raw, color="red"):
+                                actor_output = self.actor_rollout_wg.update_actor_ntp(batch)
+                            actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
+                            metrics.update(actor_output_metrics)
+
+                            # Check if the ESI (Elastic Server Instance)/training plan is close to expiration.
+                            esi_close_to_expiration = should_save_ckpt_esi(
+                                max_steps_duration=self.max_steps_duration,
+                                redundant_time=self.config.trainer.esi_redundant_time,
+                            )
+                            # Check if the conditions for saving a checkpoint are met.
+                            # The conditions include a mandatory condition (1) and
+                            # one of the following optional conditions (2/3/4):
+                            # 1. The save frequency is set to a positive value.
+                            # 2. It's the last training step.
+                            # 3. The current step number is a multiple of the save frequency.
+                            # 4. The ESI(Elastic Server Instance)/training plan is close to expiration.
+                            if self.config.trainer.save_freq > 0 and (
+                                is_last_step
+                                or self.global_steps % self.config.trainer.save_freq == 0
+                                or esi_close_to_expiration
+                            ):
+                                if esi_close_to_expiration:
+                                    print("Force saving checkpoint: ESI instance expiration approaching.")
+                                with marked_timer("save_checkpoint", timing_raw, color="green"):
+                                    self._save_checkpoint()
+
+                            with marked_timer("stop_profile", timing_raw):
+                                self._stop_profiling(do_profile)
+
+    #                        steps_duration = timing_raw["step"]
+    #                        self.max_steps_duration = max(self.max_steps_duration, steps_duration)
+
+                            # training metrics
+                            metrics.update(
+                                {
+                                    "training/global_step": self.global_steps,
+                                    "training/epoch": epoch,
+                                }
+                            )
+                            # collect metrics
+                            metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic, tokenizer=self.tokenizer, ntp=True))
+                            metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
+                            # TODO: implement actual tflpo and theoretical tflpo
+    #                       n_gpus = self.resource_pool_manager.get_n_gpus()
+    #                        metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+                            if isinstance(self.train_dataloader.sampler, AbstractCurriculumSampler):
+                                self.train_dataloader.sampler.update(batch=batch)
+
+                            # TODO: make a canonical logger that supports various backend
+                            logger.log(data=metrics, step=self.global_steps)
+
+                            progress_bar.update(1)
+                            #self.global_steps += 1
+                        batch_list, gen_batch_output_list = [], []    
+                        continue
+                    #"""
                     batch.non_tensor_batch["uid"] = np.array(
                         [str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object
                     )
-                    # repeat to align with repeated responses in rollout
-                    if self.training_q:
-                        batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+                    batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                     batch = batch.union(gen_batch_output)
 
                     if "response_mask" not in batch.batch.keys():
@@ -1235,64 +1312,6 @@ class RayPPOTrainer:
                     batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
                     batch.meta_info["global_steps"] = self.global_steps
 
-                    if not self.training_q and self.inference_ready:
-                        # update actor
-                        with marked_timer("update_actor", timing_raw, color="red"):
-                            actor_output = self.actor_rollout_wg.update_actor_ntp(batch)
-                        actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
-                        metrics.update(actor_output_metrics)
-
-                        # Check if the ESI (Elastic Server Instance)/training plan is close to expiration.
-                        esi_close_to_expiration = should_save_ckpt_esi(
-                            max_steps_duration=self.max_steps_duration,
-                            redundant_time=self.config.trainer.esi_redundant_time,
-                        )
-                        # Check if the conditions for saving a checkpoint are met.
-                        # The conditions include a mandatory condition (1) and
-                        # one of the following optional conditions (2/3/4):
-                        # 1. The save frequency is set to a positive value.
-                        # 2. It's the last training step.
-                        # 3. The current step number is a multiple of the save frequency.
-                        # 4. The ESI(Elastic Server Instance)/training plan is close to expiration.
-                        if self.config.trainer.save_freq > 0 and (
-                            is_last_step
-                            or self.global_steps % self.config.trainer.save_freq == 0
-                            or esi_close_to_expiration
-                        ):
-                            if esi_close_to_expiration:
-                                print("Force saving checkpoint: ESI instance expiration approaching.")
-                            with marked_timer("save_checkpoint", timing_raw, color="green"):
-                                self._save_checkpoint()
-
-                        with marked_timer("stop_profile", timing_raw):
-                            self._stop_profiling(do_profile)
-
-#                        steps_duration = timing_raw["step"]
-#                        self.max_steps_duration = max(self.max_steps_duration, steps_duration)
-
-                        # training metrics
-                        metrics.update(
-                            {
-                                "training/global_step": self.global_steps,
-                                "training/epoch": epoch,
-                            }
-                        )
-                        # collect metrics
-                        metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic, tokenizer=self.tokenizer, ntp=True))
-                        metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
-                        # TODO: implement actual tflpo and theoretical tflpo
- #                       n_gpus = self.resource_pool_manager.get_n_gpus()
-#                        metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
-                        if isinstance(self.train_dataloader.sampler, AbstractCurriculumSampler):
-                            self.train_dataloader.sampler.update(batch=batch)
-
-                        # TODO: make a canonical logger that supports various backend
-                        logger.log(data=metrics, step=self.global_steps)
-
-                        progress_bar.update(1)
-                        self.global_steps += 1
-                        continue
-                    #"""
                     with marked_timer("reward", timing_raw, color="yellow"):
                         # compute reward model score
                         if self.use_rm:
