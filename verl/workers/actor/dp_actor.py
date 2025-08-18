@@ -387,7 +387,7 @@ class DataParallelPPOActor(BasePPOActor):
                         tid2_list.append((masked_log_probs[0, n]).item())
                         res_2_list.append(response_ids[0, n].item())
                 
-                if (mini_iter == 0 or mini_iter == 1):
+                #if (mini_iter == 0 or mini_iter == 1):
                   #  """
                  #   if not calculate_entropy:
                  #       print("tid1: ", tid1_list, "endtid1")
