@@ -1176,7 +1176,7 @@ class RayPPOTrainer:
                     self.use_reference_policy
                     and ref_update_freq > 0
                     and self.global_steps % ref_update_freq == 0
-                    and self.global_step > 0
+                    and self.global_steps > 0
                 ):
                     print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
                     actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/ckpts/step_{self.global_steps}"  # Temporary path
@@ -1210,16 +1210,18 @@ class RayPPOTrainer:
 
                     if not self.training_q:
                         gen_batch_output_list.append(gen_batch_output)
-                        self.global_steps += 1
                         if not self.global_steps % ref_update_freq == (ref_update_freq - 1):
+                            self.global_steps += 1
                             continue
+                        else:
+                            self.global_steps += 1
 
                     if not self.training_q:
                         self.global_steps -= (ref_update_freq - q_steps)
                         if self.anchor_path is not None:
-                            self.actor_rollout_wg.init_model(anchor_path=self.anchor_path)
+                            self.actor_rollout_wg.reset_actor_model(new_model_path=self.anchor_path)
                         else:
-                            self.actor_rollout_wg.init_model()
+                            self.actor_rollout_wg.reset_actor_model()
                         for batch, gen_batch_output in zip(batch_list, gen_batch_output_list):
                             batch.non_tensor_batch["uid"] = np.array(
                                 [str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object
