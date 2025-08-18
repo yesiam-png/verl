@@ -25,7 +25,7 @@ import torch.nn.functional as F
 from tensordict import TensorDict
 from torch import nn
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, MultiStepLR
 from transformers import PreTrainedTokenizer
 
 from verl.utils.device import get_device_name, get_torch_device
@@ -573,6 +573,24 @@ def get_constant_schedule_with_warmup(
         return 1.0
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+def get_multistep_schedule(
+    optimizer: Optimizer,
+    m_steps: int,
+):
+    """
+    Create a constant LR schedule with a linear warmup phase.
+
+    Args:
+        optimizer (Optimizer): Wrapped optimizer.
+        num_warmup_steps (int): Number of steps to ramp up the LR from 0 to initial value.
+        last_epoch (int, optional): The index of the last epoch when resuming training. Defaults to -1.
+
+    Returns:
+        LambdaLR: Scheduler that increases LR linearly during warmup, then holds it constant.
+    """
+
+    return MultiStepLR(optimizer, milestones=[m_steps], gamma=0.1)
 
 
 def prepare_decoder_attention_mask(attention_mask, input_shape, inputs_embeds):

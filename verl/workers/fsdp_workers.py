@@ -219,6 +219,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         trust_remote_code=False,
         use_liger=False,
         role="actor",
+        m_steps=0,
         enable_activation_offload=False,
     ):
         from torch import optim
@@ -414,7 +415,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
         # TODO: add more optimizer args into config
         if role == "actor" and optim_config is not None:
-            from verl.utils.torch_functional import get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup
+            from verl.utils.torch_functional import get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup, get_multistep_schedule
 
             actor_optimizer = optim.AdamW(
                 actor_module_fsdp.parameters(),
@@ -446,6 +447,11 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                     num_training_steps=total_steps,
                     min_lr_ratio=min_lr_ratio,
                     num_cycles=num_cycles,
+                )
+            elif warmup_style == "multistep":
+                actor_lr_scheduler = get_multistep_schedule(
+                    optimizer=actor_optimizer,
+                    m_steps=m_steps,
                 )
             else:
                 raise NotImplementedError(f"Warmup style {warmup_style} is not supported")
@@ -561,7 +567,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         return rollout, rollout_sharding_manager
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def reset_actor_model(self, new_model_path=None):
+    def reset_actor_model(self, m_steps=0, new_model_path=None):
         """
         Resets the actor model, optimizer, and scheduler with weights from a new Hugging Face model path.
         This method will completely replace the existing actor model and its associated optimizer.
@@ -593,6 +599,8 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         use_remove_padding = self.config.model.get("use_remove_padding", False)
         use_fused_kernels = self.config.model.get("use_fused_kernels", False)
         optim_config = self.config.actor.optim
+        optim_config.lr = optim_config.get("lr", 1e-5) * 10.0
+        optim_config.warmup_style = "multistep"
         fsdp_config = self.config.actor.fsdp_config
 
         # 1. Re-build the model, optimizer, and scheduler using the new path by calling the existing helper function
@@ -612,6 +620,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             trust_remote_code=self.config.model.get("trust_remote_code", False),
             use_liger=self.config.model.get("use_liger", False),
             role="actor",
+            m_steps=m_steps,
             enable_activation_offload=self.config.model.get("enable_activation_offload", False),
         )
 
