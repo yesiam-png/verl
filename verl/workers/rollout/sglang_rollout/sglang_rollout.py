@@ -791,6 +791,7 @@ class SGLangRollout(BaseRollout):
         req: AsyncRolloutRequest,
         do_sample: bool = True,
         is_validate: bool = False,
+        training_q: bool = True,
         **kwargs,
     ) -> AsyncRolloutRequest:
         assert self._tp_rank == 0, "only the master process can call this function"
@@ -880,10 +881,6 @@ class SGLangRollout(BaseRollout):
                     else:
                         content = "\n"
 
-                _req.add_assistant_message(
-                    self.processing_class,
-                    content, user_turns
-                )
                 interaction_name = _req.interaction_kwargs.get(
                     "name", "gsm8k"
                 )
@@ -892,6 +889,14 @@ class SGLangRollout(BaseRollout):
                     _req.request_id, content, **_req.interaction_kwargs
                 )
                 format_reward.append(reward)
+
+                if reward == 0.0 and not training_q:  # ensure that format is always correct when not training q
+                    content = "\n"
+                    
+                _req.add_assistant_message(
+                    self.processing_class,
+                    content, user_turns
+                )
                 assert _req.interaction_kwargs and self.interaction_map
                 if (
                     _req.interaction_kwargs
@@ -1025,6 +1030,7 @@ class SGLangRollout(BaseRollout):
         do_sample = prompts.meta_info.get("do_sample", True)
         is_validate = prompts.meta_info.get("validate", False)
         tgt_device = prompts.batch["input_ids"].device
+        training_q = prompts.meta_info["training_q"]
         if self._tp_rank == 0:
             req_list = self._preprocess_prompt_to_async_rollout_requests(
                 prompts,
@@ -1032,7 +1038,7 @@ class SGLangRollout(BaseRollout):
             loop = asyncio.get_event_loop()
             output_req_list = loop.run_until_complete(
                 asyncio.gather(
-                    *[self._async_rollout_a_request(req, do_sample, is_validate, **kwargs) for req in req_list],
+                    *[self._async_rollout_a_request(req, do_sample, is_validate, training_q, **kwargs) for req in req_list],
                 )
             )
             sorted_output_req_list = sorted(output_req_list, key=lambda x: (x.batch_data_id, x.rollout_offset))

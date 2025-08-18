@@ -1179,6 +1179,7 @@ class RayPPOTrainer:
                     self.training_q = False
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
+                gen_batch.meta_info["training_q"] = self.training_q
                 if self.training_q:
                     gen_batch = gen_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
 
