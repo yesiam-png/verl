@@ -389,9 +389,9 @@ class DataParallelPPOActor(BasePPOActor):
                 
                 if (mini_iter == 0 or mini_iter == 1):
                   #  """
-                    if not calculate_entropy:
-                        print("tid1: ", tid1_list, "endtid1")
-                        print("tid6: ", tid2_list, "endtid6")
+                 #   if not calculate_entropy:
+                 #       print("tid1: ", tid1_list, "endtid1")
+                 #       print("tid6: ", tid2_list, "endtid6")
 
                 turn_sums.scatter_add_(1, masked_turn_ids, masked_log_probs)
                 turn_counts.scatter_add_(1, masked_turn_ids, gt_mask)
@@ -527,22 +527,6 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                     )
-                    """
-                    with torch.no_grad():
-                        gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)
-                        reward_scores = (log_prob * gt_mask).sum(dim=-1)   # shape [batch]
-                        count    = gt_mask.sum(dim=-1)        # shape [batch]
-                        reward_scores = (reward_scores / count.clamp_min(1)).detach()
-
-                      #  reward_scores = (log_prob * gt_mask).sum(dim=-1).detach()  # TODO: need to change this to separated sum
-
-                    advantages, returns = core_algos.compute_grpo_outcome_advantage(
-                        reward_scores=reward_scores,
-                        response_mask=response_mask,
-                        index=uid,
-                        norm_adv_by_std_in_grpo=True,
-                    )
-                    """
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
@@ -578,14 +562,6 @@ class DataParallelPPOActor(BasePPOActor):
                     else:
                         policy_loss = pg_loss
 
-                    # NTP loss
-                    response_attention_mask = model_inputs["response_attention_mask"]
-                    gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)   
-                    ntp_loss = agg_loss(loss_mat=log_prob, loss_mask=gt_mask, loss_agg_mode=loss_agg_mode)
-                    wramup_ratio = min(1.0, data.meta_info["global_steps"] / 100)
-                    policy_loss = policy_loss - ntp_loss * self.config.ntp_coeff * wramup_ratio
-                    micro_batch_metrics.update({"critic/ntp_loss/mean": -ntp_loss.detach().item()})
-
                     if self.config.use_kl_loss:
                         ref_log_prob = model_inputs["ref_log_prob"]
                         # compute kl loss
@@ -619,6 +595,81 @@ class DataParallelPPOActor(BasePPOActor):
                          #   "critic/advantages/min": torch.min(advantages).detach().item(),
                         }
                     )
+                    append_to_dict(metrics, micro_batch_metrics)
+
+                grad_norm = self._optimizer_step()
+                mini_batch_metrics = {"actor/grad_norm": grad_norm.detach().item()}
+                append_to_dict(metrics, mini_batch_metrics)
+        self.actor_optimizer.zero_grad()
+        return metrics
+
+    @GPUMemoryLogger(role="dp actor", logger=logger)
+    def update_policy_ntp(self, data: DataProto):
+        # make sure we are in training mode
+        self.actor_module.train()
+
+        temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
+
+        select_keys = [
+            "responses",
+            "response_mask",
+            "input_ids",
+            "attention_mask",
+            "position_ids",
+            "old_log_probs",
+            "advantages",
+            "response_attention_mask",
+        ]
+
+        has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
+        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
+
+        data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
+
+        # Split to make minibatch iterator for updating the actor
+        # See PPO paper for details. https://arxiv.org/abs/1707.06347
+        mini_batches = data.split(self.config.ntp_mini_batch_size)
+
+        metrics = {}
+        for _ in range(self.config.ppo_epochs):
+            for batch_idx, mini_batch in enumerate(mini_batches):
+                if self.config.use_dynamic_bsz:
+                    max_token_len = self.config.ppo_max_token_len_per_gpu * self.ulysses_sequence_parallel_size
+                    micro_batches, _ = prepare_dynamic_batch(mini_batch, max_token_len=max_token_len)
+                else:
+                    self.gradient_accumulation = (
+                        self.config.ntp_mini_batch_size // self.config.ntp_micro_batch_size_per_gpu
+                    )
+                    micro_batches = mini_batch.split(self.config.ntp_micro_batch_size_per_gpu)
+
+                self.actor_optimizer.zero_grad()
+
+                for micro_batch in micro_batches:
+                    micro_batch_metrics = {}
+                    model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
+                   # response_mask = model_inputs["response_mask"]
+
+                    entropy, log_prob = self._forward_micro_batch(
+                        model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
+                    )
+
+                    loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
+
+                    # NTP loss
+                    response_attention_mask = model_inputs["response_attention_mask"]
+               #     gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)   
+                    ntp_loss = agg_loss(loss_mat=log_prob, loss_mask=response_attention_mask, loss_agg_mode=loss_agg_mode)
+                 #   wramup_ratio = min(1.0, data.meta_info["global_steps"] / 100)
+                    policy_loss = - ntp_loss * self.config.ntp_coeff #* wramup_ratio
+                    micro_batch_metrics.update({"critic/ntp_loss/mean": -ntp_loss.detach().item()})
+
+                    if self.config.use_dynamic_bsz:
+                        # relative to the dynamic bsz
+                        loss = policy_loss * (response_attention_mask.shape[0] / self.config.ntp_mini_batch_size)
+                    else:
+                        loss = policy_loss / self.gradient_accumulation
+                    loss.backward()
+
                     append_to_dict(metrics, micro_batch_metrics)
 
                 grad_norm = self._optimizer_step()

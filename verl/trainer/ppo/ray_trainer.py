@@ -1160,10 +1160,28 @@ class RayPPOTrainer:
                     non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
                 )
 
+                ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
+                if (
+                    self.use_reference_policy
+                    and ref_update_freq > 0
+                    and self.global_steps % ref_update_freq == 0
+                ):
+                    print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
+                    actor_state_path = "/tmp/actor_state_mid"  # Temporary path
+                    self.actor_rollout_wg.save_checkpoint(actor_state_path)
+                    self.ref_policy_wg.load_checkpoint(actor_state_path, None, False)
+
+                    print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
+                if self.global_steps % ref_update_freq <= self.config.trainer.get("q_step", -1):
+                    self.training_q = True
+                else:
+                    self.training_q = False
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
-                gen_batch = gen_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+                if self.training_q:
+                    gen_batch = gen_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
 
+                # update ref policy
                 is_last_step = self.global_steps >= self.total_training_steps
 
                 with marked_timer("step", timing_raw):
@@ -1177,23 +1195,25 @@ class RayPPOTrainer:
                         timing_raw.update(gen_batch_output.meta_info["timing"])
                         gen_batch_output.meta_info.pop("timing", None)
 
-                    if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
-                        with marked_timer("gen_max", timing_raw, color="purple"):
-                            gen_baseline_batch = deepcopy(gen_batch)
-                            gen_baseline_batch.meta_info["do_sample"] = False
-                            if not self.async_rollout_mode:
-                                gen_baseline_output = self.actor_rollout_wg.generate_sequences(gen_baseline_batch)
-                            else:
-                                gen_baseline_output = self.async_rollout_manager.generate_sequences(gen_baseline_batch)
-                            batch = batch.union(gen_baseline_output)
-                            reward_baseline_tensor = self.reward_fn(batch)
-                            reward_baseline_tensor = reward_baseline_tensor.sum(dim=-1)
-
-                            batch.pop(batch_keys=list(gen_baseline_output.batch.keys()))
-
-                            batch.batch["reward_baselines"] = reward_baseline_tensor
-
-                            del gen_baseline_batch, gen_baseline_output
+                    if not self.training_q:
+                        # update actor
+                        actor_output = self.actor_rollout_wg.update_actor_ntp(batch)
+                        actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
+                        metrics.update(actor_output_metrics)
+                        # training metrics
+                        metrics.update(
+                            {
+                                "training/global_step": self.global_steps,
+                                "training/epoch": epoch,
+                            }
+                        )
+                        # collect metrics
+                        metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic, tokenizer=self.tokenizer))
+                        metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
+                        # TODO: implement actual tflpo and theoretical tflpo
+                        n_gpus = self.resource_pool_manager.get_n_gpus()
+                        metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+                        continue
 
                     batch.non_tensor_batch["uid"] = np.array(
                         [str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object
@@ -1262,7 +1282,7 @@ class RayPPOTrainer:
                                     "training/rollout_probs_diff_std": rollout_probs_diff_std.detach().item(),
                                 }
                             )
-                    assert not self.use_reference_policy
+                    assert self.use_reference_policy
                     if self.use_reference_policy:
                         # compute reference log_prob
                         with marked_timer("ref", timing_raw, color="olive"):

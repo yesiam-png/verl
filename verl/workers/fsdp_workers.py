@@ -716,6 +716,52 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         return output
 
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
+    @DistProfiler.annotate(color="red", role="actor_update_ntp")
+    def update_actor_ntp(self, data: DataProto):
+        # Support all hardwares
+        data = data.to(get_device_id())
+
+        assert self._is_actor
+        if self._is_offload_param:
+            load_fsdp_model_to_gpu(self.actor_module_fsdp)
+        if self._is_offload_optimizer:
+            load_fsdp_optimizer(optimizer=self.actor_optimizer, device_id=get_device_id())
+
+        with self.ulysses_sharding_manager:
+            data = self.ulysses_sharding_manager.preprocess_data(data=data)
+            # perform training
+            with Timer(name="update_policy_ntp", logger=None) as timer:
+                metrics = self.actor.update_policy_ntp(data=data)
+            delta_time = timer.last
+            global_num_tokens = data.meta_info["global_token_num"]
+            estimated_flops, promised_flops = self.flops_counter.estimate_flops(global_num_tokens, delta_time)
+            metrics["perf/mfu/actor"] = (
+                estimated_flops * self.config.actor.ppo_epochs / promised_flops / self.world_size
+            )
+            metrics["perf/max_memory_allocated_gb"] = get_torch_device().max_memory_allocated() / (1024**3)
+            metrics["perf/max_memory_reserved_gb"] = get_torch_device().max_memory_reserved() / (1024**3)
+            metrics["perf/cpu_memory_used_gb"] = psutil.virtual_memory().used / (1024**3)
+
+            lr = self.actor_lr_scheduler.get_last_lr()[0]
+            metrics["actor/lr"] = lr
+            self.actor_lr_scheduler.step()
+
+            # TODO: here, we should return all metrics
+            output = DataProto(meta_info={"metrics": metrics})
+
+            output = self.ulysses_sharding_manager.postprocess_data(data=output)
+            output = output.to("cpu")
+
+        if self._is_offload_param:
+            offload_fsdp_model_to_cpu(self.actor_module_fsdp)
+            log_gpu_memory_usage("After offload actor model during update_actor", logger=logger)
+        if self._is_offload_optimizer:
+            offload_fsdp_optimizer(optimizer=self.actor_optimizer)
+            log_gpu_memory_usage("After offload actor optimizer during update_actor", logger=logger)
+
+        return output
+
+    @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     @DistProfiler.annotate(color="red", role="rollout_generate")
     def generate_sequences(self, prompts: DataProto):
         # Support all hardwares
@@ -781,7 +827,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 output, entropys, reward_scores, turn_means, turn_starts_ = self.actor.compute_log_prob(data=data, calculate_entropy=True)
 
             output = DataProto.from_dict(
-                tensors={"old_log_probs": output, "entropys": entropys, "reward_scores": reward_scores, "turn_means": turn_means, "turn_starts_": turn_starts_},
+                tensors={"old_log_probs": output, "entropys": entropys},
                 meta_info={"temperature": self.config.rollout.temperature},
             )
             output = self.ulysses_sharding_manager.postprocess_data(output)
@@ -824,7 +870,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             data = self.ulysses_sharding_manager.preprocess_data(data)
 
             output, _, reward_scores, turn_means, turn_starts_ = self.ref_policy.compute_log_prob(data=data, calculate_entropy=False)
-            output = DataProto.from_dict(tensors={"ref_log_prob": output})
+            output = DataProto.from_dict(tensors={"ref_log_prob": output, "reward_scores": reward_scores, "turn_means": turn_means, "turn_starts_": turn_starts_})
             output = self.ulysses_sharding_manager.postprocess_data(output)
 
         output = output.to("cpu")
