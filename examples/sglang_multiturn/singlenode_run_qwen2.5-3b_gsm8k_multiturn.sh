@@ -18,7 +18,7 @@ python3 -m verl.trainer.main_ppo \
     data.truncation='error' \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
-    actor_rollout_ref.model.path=Qwen/Qwen2.5-3B \
+    actor_rollout_ref.model.path=/root/.cache/huggingface/hub/models--Qwen--Qwen2.5-3B/snapshots/3aab1f1954e9cc14eb9509a215f9e5ca08227a9b \
     +actor_rollout_ref.actor.ntp_coeff=1.0 \
     actor_rollout_ref.actor.optim.lr=2e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -46,7 +46,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-new' \
-    trainer.experiment_name='em-bs512-multisteplr-2e6-60-120' \
+    trainer.experiment_name='em-freq60-iter-nosys' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
@@ -54,7 +54,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
     +trainer.q_steps=60 \
-    +trainer.ref_update_freq=120 \
+    +trainer.ref_update_freq=60 \
     data.train_files=/root/data/sync_code/train.parquet \
     data.val_files=/root/data/sync_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \

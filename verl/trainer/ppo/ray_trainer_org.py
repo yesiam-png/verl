@@ -1158,10 +1158,10 @@ class RayPPOTrainer:
                 if "split_lines" in batch.non_tensor_batch:
                     non_tensor_batch_keys_to_pop.append("split_lines")
 
-            #    q_steps = self.config.trainer.get("q_steps", -1)
+                q_steps = self.config.trainer.get("q_steps", -1)
                 ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
                 print("global_steps", self.global_steps)
-                if self.global_steps % 2 != 0:#ref_update_freq < q_steps:
+                if self.global_steps % ref_update_freq < q_steps:
                     self.training_q = True
                 else:
                     self.training_q = False
@@ -1212,17 +1212,17 @@ class RayPPOTrainer:
                         gen_batch_output_list.append(gen_batch_output)
                         if not self.global_steps % ref_update_freq == (ref_update_freq - 1):
                             self.global_steps += 1
-                       #     continue
+                            continue
                         else:
                             self.global_steps += 1
 
                     if not self.training_q:
-                        self.global_steps -= 1#(ref_update_freq - q_steps)
-                    #    m_steps = 1#ref_update_freq - q_steps
-                    #    if self.anchor_path is not None:
-                    #        self.actor_rollout_wg.reset_actor_model(m_steps=m_steps, new_model_path=self.anchor_path)
-                    #    else:
-                    #        self.actor_rollout_wg.reset_actor_model(m_steps=m_steps)
+                        self.global_steps -= (ref_update_freq - q_steps)
+                        m_steps = ref_update_freq - q_steps
+                        if self.anchor_path is not None:
+                            self.actor_rollout_wg.reset_actor_model(m_steps=m_steps, new_model_path=self.anchor_path)
+                        else:
+                            self.actor_rollout_wg.reset_actor_model(m_steps=m_steps)
                         for batch, gen_batch_output in zip(batch_list, gen_batch_output_list):
                             batch.non_tensor_batch["uid"] = np.array(
                                 [str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object

@@ -121,7 +121,9 @@ if __name__ == "__main__":
                 no_asserts = no_asserts[: last_fence + 1]
             question_raw = "\n".join(no_asserts)
 
-            system_prompt = "For each upcoming section of code, either provide a concise comment explaining it, OR directly skip to the next line."
+            system_prompt = ""
+
+         #   system_prompt = "For each upcoming section of code, either provide a concise comment explaining it, OR directly skip to the next line."
 #            system_prompt = "After each <eol>, either provide a concise comment explaining the purpose and logic of the upcoming section of code, OR directly skip to the next line."
           #  system_prompt = "Generate either a comment to explain the next several lines of code, or skip directly to the next line."
             question = system_prompt + question_raw
