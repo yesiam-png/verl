@@ -220,6 +220,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         use_liger=False,
         role="actor",
         m_steps=0,
+        enlarge_lr=False,
         enable_activation_offload=False,
     ):
         from torch import optim
@@ -419,7 +420,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
             actor_optimizer = optim.AdamW(
                 actor_module_fsdp.parameters(),
-                lr=optim_config.lr,
+                lr=optim_config.lr if not enlarge_lr else optim_config.lr * 10.0,
                 betas=optim_config.get("betas", (0.9, 0.999)),
                 weight_decay=optim_config.get("weight_decay", 1e-2),
             )
@@ -599,7 +600,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         use_remove_padding = self.config.model.get("use_remove_padding", False)
         use_fused_kernels = self.config.model.get("use_fused_kernels", False)
         optim_config = self.config.actor.optim
-        optim_config.lr = optim_config.get("lr", 1e-5) * 10.0
+      #  optim_config.lr = optim_config.get("lr", 1e-5) * 10.0
         optim_config.warmup_style = "multistep"
         fsdp_config = self.config.actor.fsdp_config
 
@@ -621,6 +622,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             use_liger=self.config.model.get("use_liger", False),
             role="actor",
             m_steps=m_steps,
+            enlarge_lr=True,
             enable_activation_offload=self.config.model.get("enable_activation_offload", False),
         )
 

@@ -46,7 +46,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-new' \
-    trainer.experiment_name='em-bs512-multisteplr-1ntp-40-120' \
+    trainer.experiment_name='em-bs512-multisteplr-2e6-40-120' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
