@@ -218,7 +218,7 @@ class TaskRunner:
 
         # Create training and validation datasets.
         if "real_code" in config.data.train_files:
-            config.data.train_files = glob.glob("/root/data/real_code/train_*.parquet")[:40]
+            config.data.train_files = glob.glob("/root/data/real_code/train_*.parquet")[:30]
         train_dataset = create_rl_dataset(config.data.train_files, config.data, tokenizer, processor, is_train=True)
         val_dataset = create_rl_dataset(config.data.val_files, config.data, tokenizer, processor, is_train=False)
         train_sampler = create_rl_sampler(config.data, train_dataset)

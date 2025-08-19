@@ -1179,7 +1179,7 @@ class RayPPOTrainer:
                     and self.global_steps > 0
                 ):
                     print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
-                    actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/ckpts/step_{self.global_steps}"  # Temporary path
+                    actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/checkpoints/{self.config.trainer.experiment_name}/ckpts/step_{self.global_steps}"  # Temporary path
                     self.actor_rollout_wg.save_checkpoint(actor_state_path)
 
                     self.anchor_path = actor_state_path + "/huggingface"
