@@ -562,7 +562,11 @@ class DataProto:
         tensors = {}
         # tensor batch
         for key in batch_keys:
-            assert key in self.batch.keys()
+            try:
+               assert key in self.batch.keys()
+            except Exception as e:
+                print(f"Key {key} not found in batch keys: {list(self.batch.keys())}")
+                raise e
             tensors[key] = self.batch.pop(key)
         non_tensors = {}
         # non tensor batch

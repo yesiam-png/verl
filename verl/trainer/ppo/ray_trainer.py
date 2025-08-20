@@ -31,6 +31,7 @@ from typing import Optional
 import numpy as np
 import ray
 import torch
+import copy
 from omegaconf import OmegaConf, open_dict
 from torch.utils.data import Dataset, Sampler
 from torchdata.stateful_dataloader import StatefulDataLoader
@@ -1115,7 +1116,7 @@ class RayPPOTrainer:
                 return
 
         # add tqdm
-        progress_bar = tqdm(total=self.total_training_steps, initial=self.global_steps, desc="Training Progress")
+        progress_bar = tqdm(total=self.total_training_steps * 2, initial=self.global_steps, desc="Training Progress")
 
         # we start from step 1
         self.global_steps += 1
@@ -1123,12 +1124,38 @@ class RayPPOTrainer:
         self.max_steps_duration = 0
         self.anchor_path = None
 
+        ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
+        per_stage_steps = ref_update_freq // 2
         for epoch in range(self.config.trainer.total_epochs):
             batch_list = []
             gen_batch_output_list = []
-            for batch_dict in self.train_dataloader:
+            manual_dataloader = iter(self.train_dataloader)
+            while self.global_steps <= self.total_training_steps * 2:
+       #     for data_id in range(self.total_training_steps * 2):
+                if ((self.global_steps - 1) // per_stage_steps) % 2 == 0:
+                    self.training_q = True
+                    batch_dict = next(manual_dataloader)
+                else:
+                    self.training_q = False
                 metrics = {}
                 timing_raw = {}
+                print("global_steps", self.global_steps)
+
+                if (
+                    self.use_reference_policy
+                    and ref_update_freq > 0
+                    and self.global_steps % ref_update_freq == 0
+                    and self.global_steps > 0
+                ):
+                    print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
+                    actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/checkpoints/ckpts_{self.config.trainer.experiment_name}_step_{self.global_steps}"  # Temporary path
+                    self.actor_rollout_wg.save_checkpoint(actor_state_path)
+
+                    self.anchor_path = actor_state_path + "/huggingface"
+                    
+                    self.ref_policy_wg.init_model(anchor_path=self.anchor_path)
+
+                    print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
 
                 do_profile = (
                     self.global_steps in self.config.trainer.profile_steps
@@ -1138,61 +1165,42 @@ class RayPPOTrainer:
                 with marked_timer("start_profile", timing_raw):
                     self._start_profiling(do_profile)
 
-                batch: DataProto = DataProto.from_single_dict(batch_dict)
+                
+                if self.training_q:
+                    batch: DataProto = DataProto.from_single_dict(batch_dict)
 
-                # pop those keys for generation
-                batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
-                non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
-                if "multi_modal_data" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("multi_modal_data")
-                if "raw_prompt" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("raw_prompt")
-                if "tools_kwargs" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("tools_kwargs")
-                if "interaction_kwargs" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("interaction_kwargs")
-                if "index" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("index")
-                if "agent_name" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("agent_name")
-                if "split_lines" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("split_lines")
-
-                q_steps = self.config.trainer.get("q_steps", -1)
-                ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
-                print("global_steps", self.global_steps)
-                if self.global_steps % ref_update_freq < q_steps:
-                    self.training_q = True
+                    # pop those keys for generation
+                    batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
+                    non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
+                    if "multi_modal_data" in batch.non_tensor_batch:
+                        non_tensor_batch_keys_to_pop.append("multi_modal_data")
+                    if "raw_prompt" in batch.non_tensor_batch:
+                        non_tensor_batch_keys_to_pop.append("raw_prompt")
+                    if "tools_kwargs" in batch.non_tensor_batch:
+                        non_tensor_batch_keys_to_pop.append("tools_kwargs")
+                    if "interaction_kwargs" in batch.non_tensor_batch:
+                        non_tensor_batch_keys_to_pop.append("interaction_kwargs")
+                    if "index" in batch.non_tensor_batch:
+                        non_tensor_batch_keys_to_pop.append("index")
+                    if "agent_name" in batch.non_tensor_batch:
+                        non_tensor_batch_keys_to_pop.append("agent_name")
+                    if "split_lines" in batch.non_tensor_batch:
+                        non_tensor_batch_keys_to_pop.append("split_lines")
+                    #q_steps = self.config.trainer.get("q_steps", -1)
+                    #ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
+                    batch_list.append(copy.deepcopy(batch)) 
                 else:
-                    self.training_q = False
-                    batch_list.append(batch)
-
+                    batch = batch_list[(self.global_steps - 1) % per_stage_steps]
                 gen_batch = batch.pop(
                     batch_keys=batch_keys_to_pop,
                     non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
                 )
-
-                if (
-                    self.use_reference_policy
-                    and ref_update_freq > 0
-                    and self.global_steps % ref_update_freq == 0
-                    and self.global_steps > 0
-                ):
-                    print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
-                    actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/checkpoints/{self.config.trainer.experiment_name}/ckpts/step_{self.global_steps}"  # Temporary path
-                    self.actor_rollout_wg.save_checkpoint(actor_state_path)
-
-                    self.anchor_path = actor_state_path + "/huggingface"
-                    
-                    self.ref_policy_wg.init_model(anchor_path=self.anchor_path)
-
-                    print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
-
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
                 gen_batch.meta_info["training_q"] = self.training_q
                 if self.training_q:
                     gen_batch = gen_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+
 
                 # update ref policy
                 is_last_step = self.global_steps >= self.total_training_steps
@@ -1209,16 +1217,16 @@ class RayPPOTrainer:
                         gen_batch_output.meta_info.pop("timing", None)
 
                     if not self.training_q:
-                        gen_batch_output_list.append(gen_batch_output)
-                        if not self.global_steps % ref_update_freq == (ref_update_freq - 1):
+                        gen_batch_output_list.append(copy.deepcopy(gen_batch_output))
+                        if not (self.global_steps - 1) % ref_update_freq == (ref_update_freq - 1):
                             self.global_steps += 1
                             continue
                         else:
                             self.global_steps += 1
 
                     if not self.training_q:
-                        self.global_steps -= (ref_update_freq - q_steps)
-                        m_steps = ref_update_freq - q_steps
+                        self.global_steps -= per_stage_steps
+                        m_steps = per_stage_steps#ref_update_freq - q_steps
                         if self.anchor_path is not None:
                             self.actor_rollout_wg.reset_actor_model(m_steps=m_steps, new_model_path=self.anchor_path)
                         else:
