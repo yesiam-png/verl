@@ -892,7 +892,7 @@ class SGLangRollout(BaseRollout):
 
                 if reward == 0.0 and not training_q:  # ensure that format is always correct when not training q
                     content = "\n"
-                    
+                content = "\n"
                 _req.add_assistant_message(
                     self.processing_class,
                     content, user_turns
