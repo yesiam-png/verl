@@ -53,7 +53,7 @@ class Gsm8kInteraction(BaseInteraction):
         return instance_id
 
     async def generate_response(
-        self, instance_id: str, content, **kwargs
+        self, instance_id: str, content, global_steps, **kwargs
     ) -> tuple[bool, str, float, dict]:
         """
         content = ""
@@ -76,9 +76,11 @@ class Gsm8kInteraction(BaseInteraction):
             should_terminate_sequence = False
         """
      #   response = self._instance_dict[instance_id]["ground_truth"]
-     #   assert "\n" not in content
-        if (content.lstrip(' ').startswith("\n") and content.endswith("\n")):
+     #   assert "\n" not in content            
+        if (content.lstrip(' ').startswith("\n") and content.endswith("\n")):                
             reward = 1.0
+            if global_steps < 25 and not content.strip().startswith("#"):
+                reward = 0.0
         else:
             reward = 0.0
         should_terminate_sequence = False

@@ -792,6 +792,7 @@ class SGLangRollout(BaseRollout):
         do_sample: bool = True,
         is_validate: bool = False,
         training_q: bool = True,
+        global_steps: int = 0,
         **kwargs,
     ) -> AsyncRolloutRequest:
         assert self._tp_rank == 0, "only the master process can call this function"
@@ -886,7 +887,7 @@ class SGLangRollout(BaseRollout):
                 )
                 interaction = self.interaction_map[interaction_name]
                 _, _, reward, metrics = await interaction.generate_response(
-                    _req.request_id, content, **_req.interaction_kwargs
+                    _req.request_id, content, global_steps, **_req.interaction_kwargs
                 )
                 format_reward.append(reward)
 
@@ -1031,6 +1032,7 @@ class SGLangRollout(BaseRollout):
         is_validate = prompts.meta_info.get("validate", False)
         tgt_device = prompts.batch["input_ids"].device
         training_q = prompts.meta_info["training_q"]
+        global_steps = prompts.meta_info["global_steps"]
         if self._tp_rank == 0:
             req_list = self._preprocess_prompt_to_async_rollout_requests(
                 prompts,
@@ -1038,7 +1040,7 @@ class SGLangRollout(BaseRollout):
             loop = asyncio.get_event_loop()
             output_req_list = loop.run_until_complete(
                 asyncio.gather(
-                    *[self._async_rollout_a_request(req, do_sample, is_validate, training_q, **kwargs) for req in req_list],
+                    *[self._async_rollout_a_request(req, do_sample, is_validate, training_q, global_steps, **kwargs) for req in req_list],
                 )
             )
             sorted_output_req_list = sorted(output_req_list, key=lambda x: (x.batch_data_id, x.rollout_offset))

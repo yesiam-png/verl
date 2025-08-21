@@ -18,7 +18,7 @@ python3 -m verl.trainer.main_ppo \
     data.truncation='error' \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
-    actor_rollout_ref.model.path=Qwen/Qwen2.5-3B \
+    actor_rollout_ref.model.path=/root/.cache/huggingface/hub/models--allenai--OLMo-2-0425-1B/snapshots/a1847dff35000b4271fa70afc5db10fd29fedbdf \
     +actor_rollout_ref.actor.ntp_coeff=1.0 \
     actor_rollout_ref.actor.optim.lr=2e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -36,7 +36,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=80 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=sglang \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
     actor_rollout_ref.rollout.n=5 \
     actor_rollout_ref.rollout.temperature=1.0 \
     +actor_rollout_ref.rollout.per_turn_response_length=16 \
@@ -46,15 +46,15 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-new' \
-    trainer.experiment_name='em-bs512-multisteplr-2e6-60-120' \
+    trainer.experiment_name='em-syn-olmo-50-100-20onlythinkformat' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
-    trainer.save_freq=40 \
+    trainer.save_freq=5 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
-    +trainer.q_steps=60 \
-    +trainer.ref_update_freq=120 \
+    +trainer.q_steps=2 \
+    +trainer.ref_update_freq=5 \
     data.train_files=/root/data/sync_code/train.parquet \
     data.val_files=/root/data/sync_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \

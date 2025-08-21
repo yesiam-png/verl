@@ -391,7 +391,12 @@ class AsyncRolloutRequest(BaseModel):
             processing_class, messages, multi_modal_data={}, tools=tools, add_generation_prompt=False, tokenize=True
         )[..., self.base_conv_wo_gen_prompt_end_pos :]
         """
-        content_ids = processing_class(text=[self.split_lines[user_turns]], return_tensors="pt", add_special_tokens=False)
+        try:
+            content_ids = processing_class(text=[self.split_lines[user_turns]], return_tensors="pt", add_special_tokens=False)
+        except Exception as e:
+            print(e)
+            print(len(self.split_lines), user_turns)
+            content_ids = processing_class(text=["\n"], return_tensors="pt", add_special_tokens=False)
         content_ids = dict(content_ids)["input_ids"]
        # self.last_user_len = len(content_ids[0])
         self._update_input_ids(processing_class, content_ids, attention_mask=True, loss_mask=False)
