@@ -24,7 +24,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
     +actor_rollout_ref.actor.ntp_mini_batch_size=512 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=40 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=32 \
     +actor_rollout_ref.actor.ntp_micro_batch_size_per_gpu=64 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.kl_loss_coef=0.0 \
@@ -46,15 +46,15 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-new' \
-    trainer.experiment_name='realdata-bs512-80-160' \
+    trainer.experiment_name='mixdata-ours-40-80' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
     trainer.save_freq=40 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
-    +trainer.q_steps=80 \
-    +trainer.ref_update_freq=160 \
+    +trainer.q_steps=40 \
+    +trainer.ref_update_freq=80 \
     data.train_files=/root/data/real_code \
     data.val_files=/root/data/real_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \

@@ -120,8 +120,9 @@ if __name__ == "__main__":
                 last_fence = fence_idxs[-1]
                 no_asserts = no_asserts[: last_fence + 1]
             question_raw = "\n".join(no_asserts)
+            system_prompt = ""
 
-            system_prompt = "For each upcoming section of code, either provide a concise comment explaining it, OR directly skip to the next line."
+      #      system_prompt = "For each upcoming section of code, either provide a concise comment explaining it, OR directly skip to the next line."
 #            system_prompt = "After each <eol>, either provide a concise comment explaining the purpose and logic of the upcoming section of code, OR directly skip to the next line."
           #  system_prompt = "Generate either a comment to explain the next several lines of code, or skip directly to the next line."
             question = system_prompt + question_raw
@@ -156,6 +157,8 @@ if __name__ == "__main__":
 
         return process_fn
     train_dataset = train_dataset.filter(lambda example: example["lang"]=="python")
+
+    train_dataset = train_dataset.select(range(len(train_dataset) // 3))
     test_dataset = train_dataset.select(range(10))
 
     train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
