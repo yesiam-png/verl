@@ -1161,7 +1161,7 @@ class RayPPOTrainer:
                 q_steps = self.config.trainer.get("q_steps", -1)
                 ref_update_freq = self.config.trainer.get("ref_update_freq", -1)
                 print("global_steps", self.global_steps)
-                if self.global_steps % ref_update_freq <= q_steps:
+                if (self.global_steps - 1) % ref_update_freq < q_steps:
                     self.training_q = True
                 else:
                     self.training_q = False
@@ -1176,7 +1176,6 @@ class RayPPOTrainer:
                     self.use_reference_policy
                     and ref_update_freq > 0
                     and self.global_steps % ref_update_freq == 0
-                    and self.global_steps > 0
                 ):
                     print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
                     actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/checkpoints/{self.config.trainer.experiment_name}/ckpts/step_{self.global_steps}"  # Temporary path
@@ -1210,7 +1209,7 @@ class RayPPOTrainer:
 
                     if not self.training_q:
                         gen_batch_output_list.append(gen_batch_output)
-                        if not self.global_steps % ref_update_freq == (ref_update_freq - 1):
+                        if not self.global_steps % ref_update_freq == 0:
                             self.global_steps += 1
                             continue
                         else:

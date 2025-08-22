@@ -79,7 +79,7 @@ class Gsm8kInteraction(BaseInteraction):
      #   assert "\n" not in content            
         if (content.lstrip(' ').startswith("\n") and content.endswith("\n")):                
             reward = 1.0
-            if global_steps < 25 and not content.strip().startswith("#"):
+            if global_steps < 10 and not content.strip().startswith("#"):
                 reward = 0.0
         else:
             reward = 0.0
