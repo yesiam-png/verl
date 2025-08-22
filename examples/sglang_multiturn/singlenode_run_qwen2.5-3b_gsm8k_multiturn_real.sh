@@ -50,11 +50,11 @@ python3 -m verl.trainer.main_ppo \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
-    trainer.save_freq=3 \
+    trainer.save_freq=80 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
     +trainer.q_steps=0 \
-    +trainer.ref_update_freq=2 \
+    +trainer.ref_update_freq=80 \
     data.train_files=/root/data/real_code \
     data.val_files=/root/data/real_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
