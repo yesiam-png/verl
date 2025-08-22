@@ -550,6 +550,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
             if torch.distributed.get_world_size() == 1:
                 self.config.rollout.load_format = "dummy_hf"
+            """
             rollout_sharding_manager = FSDPSGLangShardingManager(
                 module=self.actor_module_fsdp,
                 inference_engine=rollout._engine,
@@ -560,12 +561,13 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 offload_param=self._is_offload_param,
                 multi_stage_wake_up=self.config.rollout.multi_stage_wake_up,
             )
+            """
             log_gpu_memory_usage("After building sharding manager", logger=logger)
 
         else:
             raise NotImplementedError(f"Rollout name: {self.config.rollout.name} is not supported")
 
-        return rollout, rollout_sharding_manager
+        return rollout#, rollout_sharding_manager
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def reset_actor_model(self, m_steps=0, new_model_path=None):
@@ -726,7 +728,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             )
 
         if self._is_rollout:
-            self.rollout, self.rollout_sharding_manager = self._build_rollout(
+            self.rollout = self._build_rollout(
                 trust_remote_code=self.config.model.get("trust_remote_code", False)
             )
 
@@ -885,6 +887,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         }
         prompts.meta_info.update(meta_info)
         timing_generate = {}
+        """
         with self.rollout_sharding_manager:
             log_gpu_memory_usage("After entering rollout sharding manager", logger=logger)
             prompts = self.rollout_sharding_manager.preprocess_data(prompts)
@@ -894,12 +897,13 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             log_gpu_memory_usage("After rollout generation", logger=logger)
 
             output = self.rollout_sharding_manager.postprocess_data(output)
-
-        timing_generate.update(self.rollout_sharding_manager.timing)
+        """
+        output = self.rollout.generate_sequences(prompts=prompts)
+        #timing_generate.update(self.rollout_sharding_manager.timing)
         # We calculate the average timing across all ranks
         # to make sure meta_info["timing"] is the same
-        timing_generate = reduce_timing(timing_generate)
-        output.meta_info["timing"] = timing_generate
+        #timing_generate = reduce_timing(timing_generate)
+        #output.meta_info["timing"] = timing_generate
         output = output.to("cpu")
 
         # clear kv cache

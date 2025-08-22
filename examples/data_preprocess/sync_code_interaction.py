@@ -158,7 +158,7 @@ if __name__ == "__main__":
         return process_fn
     train_dataset = train_dataset.filter(lambda example: example["lang"]=="python")
 
-    train_dataset = train_dataset.select(range(len(train_dataset) // 3))
+   # train_dataset = train_dataset.select(range(len(train_dataset) // 3))
     test_dataset = train_dataset.select(range(10))
 
     train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)

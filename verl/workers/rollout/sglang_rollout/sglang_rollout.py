@@ -303,11 +303,11 @@ class SGLangRollout(BaseRollout):
             f"{self._function_call_parser}"
         )
 
-        self._init_distributed_env(device_mesh_cpu=device_mesh, **kwargs)
+      #  self._init_distributed_env(device_mesh_cpu=device_mesh, **kwargs)
 
         self._verify_config(model_hf_config=model_hf_config)
         # initialize the inference engine
-        self._init_inference_engine(trust_remote_code, actor_module, port)
+       # self._init_inference_engine(trust_remote_code, actor_module, port)
 
         self._init_sampling_params(**kwargs)
 
@@ -794,7 +794,7 @@ class SGLangRollout(BaseRollout):
         training_q: bool = True,
         **kwargs,
     ) -> AsyncRolloutRequest:
-        assert self._tp_rank == 0, "only the master process can call this function"
+  #      assert self._tp_rank == 0, "only the master process can call this function"
         _req = deepcopy(req)
         finish_reason_type = None
         output = None
@@ -863,14 +863,15 @@ class SGLangRollout(BaseRollout):
                         "video support is not implemented yet, current length of video data is %d", len(video_data)
                     )
 
-                output = await self._handle_engine_call(_req, request_sampling_params, image_data=image_data)
-                content = output["text"]#.split("\n")[0]
-                finish_reason_type = FinishReasonTypeEnum.from_str(output["meta_info"]["finish_reason"]["type"])
+            #    output = await self._handle_engine_call(_req, request_sampling_params, image_data=image_data)
+                content = "\n" #output["text"]#.split("\n")[0]
+                #finish_reason_type = None #FinishReasonTypeEnum.from_str(output["meta_info"]["finish_reason"]["type"])
                 current_turns += 1
                 #if finish_reason_type == FinishReasonTypeEnum.LENGTH:
                 #    _req.add_assistant_message(self.processing_class, content)
                 #    break
                 #else:
+                """
                 if content.lstrip(' ').startswith("\n"):
                     if content.lstrip().startswith("#"):
                         hash_pos = content.find('#')
@@ -880,7 +881,6 @@ class SGLangRollout(BaseRollout):
                             content = content[:newline_pos + 1]
                     else:
                         content = "\n"
-
                 interaction_name = _req.interaction_kwargs.get(
                     "name", "gsm8k"
                 )
@@ -888,25 +888,20 @@ class SGLangRollout(BaseRollout):
                 _, _, reward, metrics = await interaction.generate_response(
                     _req.request_id, content, **_req.interaction_kwargs
                 )
-                format_reward.append(reward)
+                """
+                format_reward.append(0.0)
 
-                if reward == 0.0 and not training_q:  # ensure that format is always correct when not training q
-                    content = "\n"
-                content = "\n"
+#                if reward == 0.0 and not training_q:  # ensure that format is always correct when not training q
+#                    content = "\n"
+#                content = "\n"
                 _req.add_assistant_message(
                     self.processing_class,
                     content, user_turns
                 )
-                assert _req.interaction_kwargs and self.interaction_map
-                if (
-                    _req.interaction_kwargs
-                    and self.interaction_map
-                #    and user_turns < self.config.multi_turn.max_user_turns
-                #    and current_turns < self.config.multi_turn.max_assistant_turns
-                ):
-                    _req.state = AsyncRolloutRequestStateEnum.INTERACTING
-                else:
-                    break
+             #   assert _req.interaction_kwargs and self.interaction_map
+
+                _req.state = AsyncRolloutRequestStateEnum.INTERACTING
+
             elif _req.state == AsyncRolloutRequestStateEnum.INTERACTING:
                 user_turns += 1
              #   messages = _req.messages
@@ -916,11 +911,11 @@ class SGLangRollout(BaseRollout):
 #                interaction_name = _req.interaction_kwargs.get(
 #                    "name", "gsm8k"
 #                )  # Default to gsm8k for backward compatibility
-                if interaction_name not in self.interaction_map:
-                    raise ValueError(
-                        f"Interaction '{interaction_name}' not found in interaction_map. Available interactions: "
-                        f"{list(self.interaction_map.keys())}"
-                    )
+#                if interaction_name not in self.interaction_map:
+#                    raise ValueError(
+#                        f"Interaction '{interaction_name}' not found in interaction_map. Available interactions: "
+#                        f"{list(self.interaction_map.keys())}"
+#                    )
 
                 #interaction = self.interaction_map[interaction_name]
 #                should_terminate_sequence, _, reward, metrics = await interaction.generate_response(
@@ -1031,20 +1026,20 @@ class SGLangRollout(BaseRollout):
         is_validate = prompts.meta_info.get("validate", False)
         tgt_device = prompts.batch["input_ids"].device
         training_q = prompts.meta_info["training_q"]
-        if self._tp_rank == 0:
-            req_list = self._preprocess_prompt_to_async_rollout_requests(
-                prompts,
+#        if self._tp_rank == 0:
+        req_list = self._preprocess_prompt_to_async_rollout_requests(
+            prompts,
+        )
+        loop = asyncio.get_event_loop()
+        output_req_list = loop.run_until_complete(
+            asyncio.gather(
+                *[self._async_rollout_a_request(req, do_sample, is_validate, training_q, **kwargs) for req in req_list],
             )
-            loop = asyncio.get_event_loop()
-            output_req_list = loop.run_until_complete(
-                asyncio.gather(
-                    *[self._async_rollout_a_request(req, do_sample, is_validate, training_q, **kwargs) for req in req_list],
-                )
-            )
-            sorted_output_req_list = sorted(output_req_list, key=lambda x: (x.batch_data_id, x.rollout_offset))
-        else:
-            sorted_output_req_list = None
-
+        )
+        sorted_output_req_list = sorted(output_req_list, key=lambda x: (x.batch_data_id, x.rollout_offset))
+     #   else:
+     #       sorted_output_req_list = None
+        """
         dist.barrier()
         [sorted_output_req_list] = broadcast_pyobj(
             data=[sorted_output_req_list],
@@ -1053,6 +1048,7 @@ class SGLangRollout(BaseRollout):
             src=self._device_mesh_cpu["tp"].mesh[0].item(),
             force_cpu_device=False,
         )
+        """
         # Construct the batch data
         prompt_ids, response_ids = [], []
         prompt_attention_mask, response_attention_mask = [], []
@@ -1195,9 +1191,9 @@ class SGLangRollout(BaseRollout):
         )
 
         # free cache engine
-        if self._engine is not None and self._tp_rank == 0:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(self._engine.flush_cache())
+     #   if self._engine is not None and self._tp_rank == 0:
+     #       loop = asyncio.get_event_loop()
+     #       loop.run_until_complete(self._engine.flush_cache())
 
         return DataProto(
             batch=batch,
