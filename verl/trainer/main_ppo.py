@@ -201,7 +201,7 @@ class TaskRunner:
             mapping[Role.RewardModel] = global_pool_id
 
         # Add a reference policy worker if KL loss or KL reward is used.
-        if False: #config.algorithm.use_kl_in_reward or config.actor_rollout_ref.actor.use_kl_loss:
+        if True: #config.algorithm.use_kl_in_reward or config.actor_rollout_ref.actor.use_kl_loss:
             role_worker_mapping[Role.RefPolicy] = ray.remote(ActorRolloutRefWorker)
             mapping[Role.RefPolicy] = global_pool_id
 
@@ -217,10 +217,12 @@ class TaskRunner:
         from verl.utils.dataset.rl_dataset import collate_fn
 
         # Create training and validation datasets.
-        if "real_code" in config.data.train_files:
-            #config.data.train_files = glob.glob("/root/data/real_code/train_*.parquet")[:30]
-            #config.data.train_files.append("/root/data/sync_code/train.parquet")
-            config.data.train_files = ["/root/data/sync_code/train.parquet"]
+#        if "real_code" in config.data.train_files:
+#            config.data.train_files = glob.glob("/root/data/real_code/train_*.parquet")#[:30]
+#            config.data.train_files.append("/root/data/sync_code/train.parquet")
+      #  if "opencoder" in config.data.train_files:
+      #      config.data.train_files = ["/mnt/task_runtime/opencoder_post.parquet", "/root/data/sync_code/train.parquet"]
+
         train_dataset = create_rl_dataset(config.data.train_files, config.data, tokenizer, processor, is_train=True)
         val_dataset = create_rl_dataset(config.data.val_files, config.data, tokenizer, processor, is_train=False)
         train_sampler = create_rl_sampler(config.data, train_dataset)
