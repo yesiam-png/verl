@@ -1069,15 +1069,29 @@ class SGLangRollout(BaseRollout):
             ), f"""Request {req.request_id} has different length of 
                 {req.input_ids.shape[-1]=}, {req.attention_mask.shape[-1]=}, 
                 {req.position_ids.shape[-1]=}, {req.loss_mask.shape[-1]=}"""
-            error_message_lines = [
-                f"""Request {req.request_id} has input_ids length {req.input_ids.shape[-1]}
-                    greater than max_model_len {self.config.max_model_len}""",
-                f"Decoded input_ids: {self.processing_class.decode(req.input_ids.squeeze(0))}",
-                f"Decoded prompt_ids: {self.processing_class.decode(req.prompt_ids.squeeze(0))}",
-                f"Decoded response_ids: {self.processing_class.decode(req.response_ids.squeeze(0))}",
-                f"Messages: {req.messages}",
-                f"Max model length: {req.max_model_len}",
-            ]
+            try:
+                error_message_lines = [
+                    f"""Request {req.request_id} has input_ids length {req.input_ids.shape[-1]}
+                        greater than max_model_len {self.config.max_model_len}""",
+                    f"Decoded input_ids: {self.processing_class.decode(req.input_ids.squeeze(0))}",
+                    f"Decoded prompt_ids: {self.processing_class.decode(req.prompt_ids.squeeze(0))}",
+                    f"Decoded response_ids: {self.processing_class.decode(req.response_ids.squeeze(0))}",
+                    f"Messages: {req.messages}",
+                    f"Max model length: {req.max_model_len}",
+                ]
+            except Exception as e:
+                print(e)
+                req.input_ids = req.input_ids.to(torch.int32)
+                req.response_ids = req.response_ids.to(torch.int32)
+                error_message_lines = [
+                    f"""Request {req.request_id} has input_ids length {req.input_ids.shape[-1]}
+                        greater than max_model_len {self.config.max_model_len}""",
+                    f"Decoded input_ids: {self.processing_class.decode(req.input_ids.squeeze(0))}",
+                    f"Decoded prompt_ids: {self.processing_class.decode(req.prompt_ids.squeeze(0))}",
+                    f"Decoded response_ids: {self.processing_class.decode(req.response_ids.squeeze(0))}",
+                    f"Messages: {req.messages}",
+                    f"Max model length: {req.max_model_len}",
+                ]
             error_message = "\n".join(error_message_lines)
             assert req.input_ids.shape[-1] <= self.config.max_model_len, error_message
 
