@@ -605,18 +605,32 @@ class DataParallelPPOActor(BasePPOActor):
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy_ntp(self, data: DataProto):
+        # make sure we are in training mode
         self.actor_module.train()
-        temperature = 1.0
 
-        select_keys = ["responses","response_mask","input_ids","attention_mask","position_ids","response_attention_mask"]
-        has_mmi = "multi_modal_inputs" in data.non_tensor_batch.keys()
-        data = data.select(batch_keys=select_keys, non_tensor_batch_keys=(["multi_modal_inputs"] if has_mmi else []))
+        temperature = 1.0 #data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
 
+        select_keys = [
+            "responses",
+            "response_mask",
+            "input_ids",
+            "attention_mask",
+            "position_ids",
+            "response_attention_mask",
+        ]
+
+        has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
+        non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
+
+        data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
+
+        # Split to make minibatch iterator for updating the actor
+        # See PPO paper for details. https://arxiv.org/abs/1707.06347
         mini_batches = data.split(self.config.ntp_mini_batch_size)
-        metrics = {}
 
+        metrics = {}
         for _ in range(self.config.ppo_epochs):
-            for mini_batch in mini_batches:
+            for batch_idx, mini_batch in enumerate(mini_batches):
                 if self.config.use_dynamic_bsz:
                     max_token_len = self.config.ppo_max_token_len_per_gpu * self.ulysses_sequence_parallel_size
                     micro_batches, _ = prepare_dynamic_batch(mini_batch, max_token_len=max_token_len)
@@ -628,46 +642,37 @@ class DataParallelPPOActor(BasePPOActor):
 
                 self.actor_optimizer.zero_grad()
 
-                # (optional) exact token-mean across micro-batches
-                if getattr(self.config, "ntp_exact_token_mean", False):
-                    total_tokens = 0
-                    for mb in micro_batches:
-                        total_tokens += mb.batch["response_attention_mask"].sum().item()
-                    total_tokens = max(int(total_tokens), 1)
-
                 for micro_batch in micro_batches:
+                    micro_batch_metrics = {}
                     model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
+                   # response_mask = model_inputs["response_mask"]
 
-                    _, log_prob = self._forward_micro_batch(
+                    entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=False
                     )
-                    log_prob = log_prob.to(torch.float32)
-                    mask = model_inputs["response_attention_mask"].to(log_prob.dtype)
+                    loss_agg_mode = self.config.loss_agg_mode
 
-                    # optional EOS filtering
-                    if getattr(self.config, "ntp_ignore_eos", False) and hasattr(self, "tokenizer"):
-                        eos = getattr(self.tokenizer, "eos_token_id", None)
-                        if eos is not None:
-                            not_eos = (model_inputs["responses"] != eos).to(mask.dtype)
-                            mask = mask * not_eos
+                    loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
-                    num = -(log_prob * mask).sum()
-                    if getattr(self.config, "ntp_exact_token_mean", False):
-                        loss = self.config.ntp_coeff * (num / total_tokens)
+                    # NTP loss
+                    response_attention_mask = model_inputs["response_attention_mask"]
+               #     gt_mask = response_attention_mask * (torch.ones_like(response_mask) - response_mask)   
+                    ntp_loss = agg_loss(loss_mat=log_prob, loss_mask=response_attention_mask, loss_agg_mode=loss_agg_mode)
+                 #   wramup_ratio = min(1.0, data.meta_info["global_steps"] / 100)
+                    policy_loss = - ntp_loss * self.config.ntp_coeff #* wramup_ratio
+                    micro_batch_metrics.update({"critic/ntp_loss/mean": -ntp_loss.detach().item()})
+
+                    if self.config.use_dynamic_bsz:
+                        # relative to the dynamic bsz
+                        loss = policy_loss * (response_attention_mask.shape[0] / self.config.ntp_mini_batch_size)
                     else:
-                        den = mask.sum().clamp_min(1)
-                        ntp_loss_tokmean = num / den
-                        loss = self.config.ntp_coeff * (ntp_loss_tokmean / self.gradient_accumulation)
-
+                        loss = policy_loss / self.gradient_accumulation
                     loss.backward()
 
-                    append_to_dict(metrics, {
-                        "critic/ntp_loss/token_mean": (num / mask.sum().clamp_min(1)).detach().item(),
-                        "critic/ntp_tokens": mask.sum().detach().item(),
-                    })
+                    append_to_dict(metrics, micro_batch_metrics)
 
                 grad_norm = self._optimizer_step()
-                append_to_dict(metrics, {"actor/grad_norm": grad_norm.detach().item()})
-
+                mini_batch_metrics = {"actor/grad_norm": grad_norm.detach().item()}
+                append_to_dict(metrics, mini_batch_metrics)
         self.actor_optimizer.zero_grad()
         return metrics

@@ -217,8 +217,8 @@ class TaskRunner:
         from verl.utils.dataset.rl_dataset import collate_fn
 
         # Create training and validation datasets.
-#        if "real_code" in config.data.train_files:
-#            config.data.train_files = glob.glob("/root/data/real_code/train_*.parquet")#[:30]
+        if "real_code" in config.data.train_files:
+            config.data.train_files = glob.glob("/root/data/real_code/train_*.parquet")[:30]
 #            config.data.train_files.append("/root/data/sync_code/train.parquet")
         if "opencoder" in config.data.train_files:
             config.data.train_files = ["/mnt/task_runtime/opencoder_post.parquet", "/root/data/sync_code/train.parquet"]
