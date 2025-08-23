@@ -76,15 +76,18 @@ class Gsm8kInteraction(BaseInteraction):
             should_terminate_sequence = False
         """
      #   response = self._instance_dict[instance_id]["ground_truth"]
-     #   assert "\n" not in content            
-        if (content.lstrip(' ').startswith("\n") and content.endswith("\n")):                
-            reward = 1.0
-       #     if content.strip().startswith("#"):
-       #         reward -= 0.05
-            if global_steps < 15 and not content.strip().startswith("#"):
-                reward = 0.0
-        else:
+     #   assert "\n" not in content  
+        content = content.strip()
+
+        if not (content.startswith("#")):
             reward = 0.0
+        else:
+            reward = 1.0
+            if len(content.split()) >= 12:
+                reward -= 0.0 #0.05
+            elif content != "#":
+                reward = 0.0
+
         should_terminate_sequence = False
 #        reward = 1.0
         return should_terminate_sequence, "", reward, {}
