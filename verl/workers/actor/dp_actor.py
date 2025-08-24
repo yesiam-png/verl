@@ -400,13 +400,17 @@ class DataParallelPPOActor(BasePPOActor):
              #   print("deeeebug", turn_means.size(), turn_means)
              #   print("format_reward", format_reward.shape, format_reward)
                 format_reward = format_reward[:, :max_turns].to(turn_starts.device)
-                format_reward = F.pad(format_reward, (1, 0), 'constant', 0)
+                format_reward = F.pad(format_reward, (1, 0), 'constant', 0.0)
 
                 turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
 
                 turn_means = torch.log(turn_means_noformat) + format_reward - torch.ones_like(format_reward)
-                format_mask = (format_reward > 0.5)            # dtype: bool, same shape as format
-                turn_means = turn_means.masked_fill(~format_mask, -5.0)
+                format_mask = (format_reward > 0.05) & (format_reward < 0.5)            # dtype: bool, same shape as format
+                turn_means = turn_means.masked_fill(format_mask, -2.0)
+
+                pad_mask = (format_reward == 0.0)
+                turn_means = turn_means.masked_fill(pad_mask, 0.0)
+              #  turn_means = turn_means.clamp_min(-5.0)
 
             #    total_return = torch.sum(turn_means[:, 1:], dim=-1) / model_inputs["num_turns"]  # newly added
 
@@ -421,7 +425,6 @@ class DataParallelPPOActor(BasePPOActor):
                 mask_ones_padded = F.pad(mask_ones, (0, window - 1))
                 sum_window = F.conv1d(x_padded, kernel)          # sums over available elements
                 cnt_window = F.conv1d(mask_ones_padded, kernel)          # counts of real elements (no zeros)
-
                 turn_means = (sum_window / cnt_window.clamp_min(1)).squeeze(1)  # [B, L]
                 turn_means[:, 0] = 0.0
               #  """
