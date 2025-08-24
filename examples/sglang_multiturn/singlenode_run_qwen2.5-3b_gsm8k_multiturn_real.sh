@@ -38,7 +38,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=sglang \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
-    actor_rollout_ref.rollout.n=5 \
+    actor_rollout_ref.rollout.n=3 \
     actor_rollout_ref.rollout.temperature=1.0 \
     +actor_rollout_ref.rollout.per_turn_response_length=16 \
     +actor_rollout_ref.rollout.max_code_lines=32 \
@@ -47,15 +47,15 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-aug24' \
-    trainer.experiment_name='80-200-olmo-15warmup-005penalty-log-8alllen' \
+    trainer.experiment_name='130-400-olmo-15warmup-003penalty-log-8alllen' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
     trainer.save_freq=200 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
-    +trainer.q_steps=80 \
-    +trainer.ref_update_freq=200 \
+    +trainer.q_steps=130 \
+    +trainer.ref_update_freq=400 \
     data.train_files=/mnt/task_runtime/opencoder_post.parquet \
     data.val_files=/root/data/real_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \

@@ -99,6 +99,11 @@ def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     padded_mask = F.pad(response_loss_mask, (1, 1), "constant", 0)#torch.cat([torch.tensor([0]), response_loss_mask, torch.tensor([0])])
     diffs = padded_mask.diff()
     num_turns = torch.sum(diffs == 1, dim=-1)
+    
+    
+    format_reward = batch.batch["format_reward"]
+    think_mask = (format_reward > 0.5) & (format_reward < 1)
+    think_response_length = torch.sum(format_reward * think_mask, dim=-1) / torch.sum(think_mask, dim=-1).clamp_min(1)
     try:
         if tokenizer:
             first_res, second_res, third_res, fourth_res, second_prompt, third_prompt, fourth_prompt,  fifth_res, six_res, seven_res, fifth_prompt, six_prompt, seven_prompt = extract_first_sequence(batch.batch["responses"][0], diffs[0])
@@ -125,6 +130,7 @@ def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
         response_mask=response_mask,
         prompt_length=prompt_length,
         response_length=response_length / num_turns,
+        think_response_length=think_response_length
     )
 
 
@@ -159,6 +165,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=No
         response_info = _compute_response_info(batch, tokenizer)
         prompt_length = response_info["prompt_length"]
         response_length = response_info["response_length"]
+        think_response_length = response_info["think_response_length"]
         metrics = {
         #    "critic/format_reward/mean": torch.mean(format_reward).detach().item(),
             **(
@@ -177,6 +184,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=No
             "response_length/mean": torch.mean(response_length).detach().item(),
             "response_length/max": torch.max(response_length).detach().item(),
             "response_length/min": torch.min(response_length).detach().item(),
+            "response_length/think_response_length": torch.mean(think_response_length).detach().item(),
             # prompt length
             "prompt_length/mean": torch.mean(prompt_length).detach().item(),
             "prompt_length/max": torch.max(prompt_length).detach().item(),
@@ -203,6 +211,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=No
     response_info = _compute_response_info(batch, tokenizer)
     prompt_length = response_info["prompt_length"]
     response_length = response_info["response_length"]
+    think_response_length = response_info["think_response_length"]
 
     format_reward = batch.batch["format_reward"]
    # max_turns = sequence_reward.size(-1)
@@ -260,6 +269,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=No
         "response_length/mean": torch.mean(response_length).detach().item(),
         "response_length/max": torch.max(response_length).detach().item(),
         "response_length/min": torch.min(response_length).detach().item(),
+        "response_length/think_response_length": torch.mean(think_response_length).detach().item(),
         "response_length/clip_ratio": torch.mean(torch.eq(response_length, max_response_length).float())
         .detach()
         .item(),
