@@ -385,7 +385,7 @@ class DataParallelPPOActor(BasePPOActor):
                         turn_means = turn_means.masked_fill(format_mask, 0.0)
                     pad_mask = (format_reward == 0.0)
                     turn_means = turn_means.masked_fill(pad_mask, 0.0)
-                    print("turn_means before", turn_means[0])
+                  #  print("turn_means before", turn_means[0])
 
                 #  """
                     window = 3
@@ -398,10 +398,10 @@ class DataParallelPPOActor(BasePPOActor):
                     mask_ones_padded = F.pad(mask_ones, (0, window - 1))
                     sum_window = F.conv1d(x_padded, kernel)          # sums over available elements
                     cnt_window = F.conv1d(mask_ones_padded, kernel)          # counts of real elements (no zeros)
-                    print("sum_window", sum_window[0])
-                    print("cnt_window", cnt_window[0])
+                 #   print("sum_window", sum_window[0])
+                #    print("cnt_window", cnt_window[0])
                     turn_means = (sum_window / cnt_window.clamp_min(1)).squeeze(1)  # [B, L]
-                    print("turn_means after", turn_means[0])
+                 #   print("turn_means after", turn_means[0])
                     turn_means[:, 0] = 0.0
                 #  """
                     # 5. Scatter the means back to a sequence-shaped tensor
