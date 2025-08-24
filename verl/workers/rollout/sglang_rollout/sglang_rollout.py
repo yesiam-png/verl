@@ -872,15 +872,15 @@ class SGLangRollout(BaseRollout):
                 #    _req.add_assistant_message(self.processing_class, content)
                 #    break
                 #else:
-#                if content.lstrip(' ').startswith("\n"):
-#                    if content.lstrip().startswith("#"):
-#                        hash_pos = content.find('#')
-                newline_pos = content.find('\n')
-            
-                if newline_pos != -1:
-                    content = content[:newline_pos + 1]
- #                   else:
- #                       content = "\n"
+                if content.lstrip(' ').startswith("\n"):
+                    if content.lstrip().startswith("#"):
+                        hash_pos = content.find('#')
+                        newline_pos = content.find('\n', hash_pos)
+                    
+                        if newline_pos != -1:
+                            content = content[:newline_pos + 1]
+                    else:
+                        content = "\n"
 
                 interaction_name = _req.interaction_kwargs.get(
                     "name", "gsm8k"
