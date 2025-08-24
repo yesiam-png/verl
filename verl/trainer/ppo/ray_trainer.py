@@ -1175,14 +1175,16 @@ class RayPPOTrainer:
                 if (
                     self.use_reference_policy
                     and ref_update_freq > 0
-                    and self.global_steps % ref_update_freq == 0
+                    and (self.global_steps - 1) % ref_update_freq == 0
+                    and self.global_steps > 1
                 ):
-                    print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
-                    actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/checkpoints/{self.config.trainer.experiment_name}/ckpts/step_{self.global_steps}"  # Temporary path
-                    self.actor_rollout_wg.save_checkpoint(actor_state_path)
+                  #  print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor...")
+                 #   actor_state_path = f"/mnt/task_wrapper/user_output/artifacts/checkpoints/{self.config.trainer.experiment_name}/ckpts/step_{self.global_steps}"  # Temporary path
+                 #   self.actor_rollout_wg.save_checkpoint(actor_state_path)
+                    self.anchor_path = f"/mnt/task_wrapper/user_output/artifacts/checkpoints/{self.config.trainer.project_name}/{self.config.trainer.experiment_name}/global_step_{self.global_steps-1}/actor/huggingface"  # Temporary path
 
-                    self.anchor_path = actor_state_path + "/huggingface"
-                    
+                  #  self.anchor_path = actor_state_path + "/huggingface"
+                    print(f"\n[Step {self.global_steps}] Updating Reference Model Weights from Actor from {self.anchor_path}")
                     self.ref_policy_wg.init_model(anchor_path=self.anchor_path)
 
                     print(f"[Step {self.global_steps}] Reference Model Weights Updated.")
@@ -1220,6 +1222,7 @@ class RayPPOTrainer:
                         m_steps = ref_update_freq - q_steps
                         print(len(batch_list), m_steps)
                         assert len(batch_list) == m_steps
+                        print(f"Resetting Actor Model for Reference Policy Update from {self.anchor_path}")
                         if self.anchor_path is not None:
                             self.actor_rollout_wg.reset_actor_model(m_steps=m_steps, new_model_path=self.anchor_path)
                         else:

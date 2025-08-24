@@ -92,7 +92,6 @@ class Gsm8kInteraction(BaseInteraction):
         else:
             reward = 0.1
         should_terminate_sequence = False
-#        reward = 1.0
         return should_terminate_sequence, "", reward, {}
 
     async def calculate_score(self, instance_id: str, **kwargs) -> float:
