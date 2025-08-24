@@ -46,7 +46,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-new' \
-    trainer.experiment_name='openandsyn-ours-40-100-olmo-15warmup-nopenalty' \
+    trainer.experiment_name='openandsyn-ours-40-100-olmo-15warmup-003penalty-log' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \

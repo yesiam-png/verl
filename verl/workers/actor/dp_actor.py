@@ -404,9 +404,9 @@ class DataParallelPPOActor(BasePPOActor):
 
                 turn_means_noformat = turn_sums / turn_counts.clamp_min(1)
 
-                turn_means = turn_means_noformat + format_reward - torch.ones_like(format_reward)
+                turn_means = torch.log(turn_means_noformat) + format_reward - torch.ones_like(format_reward)
                 format_mask = (format_reward > 0.5)            # dtype: bool, same shape as format
-                turn_means = turn_means.masked_fill(~format_mask, 0.0)
+                turn_means = turn_means.masked_fill(~format_mask, -5.0)
 
             #    total_return = torch.sum(turn_means[:, 1:], dim=-1) / model_inputs["num_turns"]  # newly added
 
