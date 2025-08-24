@@ -209,7 +209,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=No
     num_turns = batch.batch["num_turns"]
     format_reward = format_reward.to(sequence_reward.device)
 
-    skip_freq = ((format_reward == 1)).sum() / (format_reward != 0).sum()
+    skip_freq = (format_reward == 1).sum() / (format_reward > 0.5).sum()
 
     format_reward = torch.sum(format_reward, dim=-1) / (num_turns.clamp_min(1))
 
