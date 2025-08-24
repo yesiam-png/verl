@@ -34,7 +34,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=80 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=80 \
-    +actor_rollout_ref.ref.logr=False \
+    +actor_rollout_ref.ref.logr=True \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=sglang \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
@@ -47,7 +47,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-newnew' \
-    trainer.experiment_name='openandsyn-ours-40-100-olmo-15warmup-005penalty-log-8lenall-clip5' \
+    trainer.experiment_name='40-100-olmo-15warmup-005penalty-log-8lenall' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
