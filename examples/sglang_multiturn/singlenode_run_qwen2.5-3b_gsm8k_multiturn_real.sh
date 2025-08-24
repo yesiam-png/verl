@@ -47,7 +47,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-aug24' \
-    trainer.experiment_name='80-200-olmo-nowarmup-nopenalty-log-nolenpenalty' \
+    trainer.experiment_name='80-200-olmo-15warmup-005penalty-log-8alllen' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
