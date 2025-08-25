@@ -932,7 +932,7 @@ class RayPPOTrainer:
 
         # path: given_path + `/global_step_{global_steps}` + `/actor`
         local_global_step_folder = os.path.join(
-            self.config.trainer.default_local_dir, f"global_step_{self.global_steps}"
+            self.config.trainer.default_local_dir, f"global_step_{self.global_steps+1}"
         )
 
         print(f"local_global_step_folder: {local_global_step_folder}")
@@ -1263,7 +1263,7 @@ class RayPPOTrainer:
                         # 4. The ESI(Elastic Server Instance)/training plan is close to expiration.
                         if self.config.trainer.save_freq > 0 and (
                             is_last_step
-                            or self.global_steps % self.config.trainer.save_freq == 0
+                            or (self.global_steps + 1) % self.config.trainer.save_freq == 0
                             or esi_close_to_expiration
                         ):
                             if esi_close_to_expiration:
