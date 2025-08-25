@@ -165,7 +165,7 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True, tokenizer=No
         response_info = _compute_response_info(batch, tokenizer)
         prompt_length = response_info["prompt_length"]
         response_length = response_info["response_length"]
-        think_response_length = response_info["think_response_length"]
+#        think_response_length = response_info["think_response_length"]
         metrics = {
         #    "critic/format_reward/mean": torch.mean(format_reward).detach().item(),
             **(
