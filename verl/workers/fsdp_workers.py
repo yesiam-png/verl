@@ -537,7 +537,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             # check: https://github.com/sgl-project/sglang/blob/00f42707eaddfc2c0528e5b1e0094025c640b7a0/python/sglang/srt/layers/quantization/fp8_utils.py#L76
             from verl.workers.sharding_manager.fsdp_sglang import FSDPSGLangShardingManager
 
-            local_path = copy_to_local(self.config.model.path)
+            local_path = copy_to_local(self.config.model.init_q)#path)
             log_gpu_memory_usage(f"Before building {rollout_name} rollout", logger=logger)
             rollout = SGLangRollout(
                 actor_module=local_path,
@@ -681,7 +681,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 fsdp_config = OmegaConf.create()
 
             #if not anchor_path:
-            local_path = copy_to_local(self.config.model.path, use_shm=use_shm)
+            local_path = copy_to_local(self.config.model.init_q, use_shm=use_shm) #copy_to_local(self.config.model.path, use_shm=use_shm)
             #else:
             #    local_path = anchor_path
             #self._cleanup_existing_models()
