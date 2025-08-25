@@ -71,7 +71,7 @@ def extract_first_sequence(token_ids, diffs):
     if len(starts) == 0:
         return torch.tensor([], dtype=token_ids.dtype)
 
-    return token_ids[starts[0]:ends[0]], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]],  token_ids[ends[0]:starts[1]], token_ids[ends[1]:starts[2]], token_ids[ends[2]:starts[3]]
+    return token_ids[starts[0]:ends[0]], token_ids[starts[1]:ends[1]], token_ids[starts[2]:ends[2]], token_ids[starts[3]:ends[3]],  token_ids[ends[0]:starts[1]], token_ids[ends[1]:starts[2]], token_ids[ends[2]:starts[3]], token_ids[starts[4]:ends[4]], token_ids[starts[5]:ends[5]], token_ids[starts[6]:ends[6]], token_ids[ends[3]:starts[4]], token_ids[ends[4]:starts[5]], token_ids[ends[5]:starts[6]],
 
 def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     """
@@ -99,6 +99,28 @@ def _compute_response_info(batch: DataProto, tokenizer=None) -> dict[str, Any]:
     padded_mask = F.pad(response_loss_mask, (1, 1), "constant", 0)#torch.cat([torch.tensor([0]), response_loss_mask, torch.tensor([0])])
     diffs = padded_mask.diff()
     num_turns = torch.sum(diffs == 1, dim=-1)
+    
+    try:
+        if tokenizer:
+            first_res, second_res, third_res, fourth_res, second_prompt, third_prompt, fourth_prompt,  fifth_res, six_res, seven_res, fifth_prompt, six_prompt, seven_prompt = extract_first_sequence(batch.batch["responses"][0], diffs[0])
+            print("first_prompt:", tokenizer.decode(batch.batch["prompts"][0].tolist(), skip_special_tokens=True), "end1prompt")
+            print("first_res:", tokenizer.decode(first_res.tolist()), "endfirst")
+            print("second_prompt:", tokenizer.decode(second_prompt.tolist()), "end2prompt")
+            print("second_res:", tokenizer.decode(second_res.tolist()), "endsecond")
+            print("third_prompt:", tokenizer.decode(third_prompt.tolist()), "end3prompt")
+            print("third_res:", tokenizer.decode(third_res.tolist()), "endthird")
+            print("fourth_prompt:", tokenizer.decode(fourth_prompt.tolist()), "end4prompt")
+            print("fourth_res:", tokenizer.decode(fourth_res.tolist()), "endfourth")
+
+            print("fifth_prompt:", tokenizer.decode(fifth_prompt.tolist()), "end5prompt")
+            print("fifth_res:", tokenizer.decode(fifth_res.tolist()), "endfifth")
+            print("six_prompt:", tokenizer.decode(six_prompt.tolist()), "endsix")
+            print("six_res:", tokenizer.decode(six_res.tolist()), "endsix")
+            print("seven_prompt:", tokenizer.decode(seven_prompt.tolist()), "end7prompt")
+            print("seven_res:", tokenizer.decode(seven_res.tolist()), "endseven")
+         #   print("seven_res:", tokenizer.decode(seven_res.tolist()), "endseven")
+    except Exception as e:
+        print("error!!", e)
 
     return dict(
         response_mask=response_mask,

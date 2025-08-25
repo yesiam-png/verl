@@ -59,41 +59,45 @@ if __name__ == "__main__":
         lines = code_text.splitlines(keepends=False) # no \n in it!!!
         if not lines:
             return []
+     #   return lines
 
         result_chunks = []
         current_chunk = []
+        # This will track the type of the current chunk: 'multiline', 'single_line', 'code', or 'blank'
+        chunk_type = None 
         in_multiline_comment = False
 
         for line in lines:
             stripped = line.strip()
-            is_this_line_code = True  # Assume it's code until proven otherwise
+            current_line_type = 'code'  # Assume it's code by default
 
-            # 1. Check if we are currently inside a multi-line comment
+            # 1. Determine the exact type of the current line
             if in_multiline_comment:
-                is_this_line_code = False
-                # Check if this line ends the block
+                current_line_type = 'multiline'
                 if any(d in stripped for d in block_delimiters):
                     in_multiline_comment = False
-            
-            # 2. Check for other non-code line types
-            elif not stripped:  # An empty line
-                is_this_line_code = False
-            elif stripped.startswith(comment_char):  # A single-line comment
-                is_this_line_code = False
-            elif any(stripped.startswith(d) for d in block_delimiters):  # Starts a multi-line comment
-                is_this_line_code = False
-                # Check if the block also closes on the same line. If not, enter multi-line mode.
+            elif not stripped:
+                current_line_type = 'blank'
+            elif stripped.startswith(comment_char):
+                current_line_type = 'single_line'
+            elif any(stripped.startswith(d) for d in block_delimiters):
+                current_line_type = 'multiline'
                 delimiter = next(d for d in block_delimiters if stripped.startswith(d))
                 if stripped.count(delimiter) < 2:
                     in_multiline_comment = True
 
-            # 3. Append the line and split if it was determined to be code
-            current_chunk.append(line)
-            if is_this_line_code:
-                result_chunks.append("\n".join(current_chunk))
+            # 2. If the line type has changed, finalize the previous chunk and start a new one.
+            # We will group blank lines with whatever chunk came before them.
+            if current_line_type != chunk_type and current_line_type != 'blank':
+                if current_chunk:
+                    result_chunks.append("\n".join(current_chunk))
                 current_chunk = []
+                chunk_type = current_line_type
+            
+            # 3. Add the current line to its chunk
+            current_chunk.append(line)
 
-        # Add any trailing lines (e.g., final comments/blank lines)
+        # Add the very last chunk after the loop finishes
         if current_chunk:
             result_chunks.append("\n".join(current_chunk))
 
@@ -150,6 +154,15 @@ if __name__ == "__main__":
             question = system_prompt + question_raw
 
             split_lines = split_on_code_line(question)
+            try:
+                while split_lines[0].strip() == "":
+                    split_lines = split_lines[1:]
+                split_lines[0] = split_lines[0] + "\n" + split_lines[1]
+                del split_lines[1]
+            except IndexError:
+                print(question, "zz")
+                split_lines == []
+             #   raise
           #  split_lines[0] = split_lines[0] + "\n" + split_lines[1]
           #  del split_lines[1]
           #  split_lines[0] = split_lines[0] + "\n" + split_lines[1]
@@ -179,12 +192,15 @@ if __name__ == "__main__":
 
         return process_fn
     train_dataset = train_dataset.filter(lambda example: example["lang"]=="python")
+    train_dataset = train_dataset.filter(lambda example: len(example["text"].splitlines()) > 1)
 
     #train_dataset = train_dataset.select(range(len(train_dataset) // 6))
     test_dataset = train_dataset.select(range(10))
 
     train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
+
+    train_dataset = train_dataset.filter(lambda example: len(example["split_lines"])>1)
 
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
