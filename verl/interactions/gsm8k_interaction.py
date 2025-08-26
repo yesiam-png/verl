@@ -85,7 +85,7 @@ class Gsm8kInteraction(BaseInteraction):
                 else:
                     reward = 0.1
             if content.strip().startswith("#"):
-                reward -= 0.05
+                reward -= 0.07
             
          #   if content.strip().startswith("#") and len(content.split()) < 8:
          #       reward = 0.1

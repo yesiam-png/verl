@@ -18,7 +18,7 @@ python3 -m verl.trainer.main_ppo \
     data.truncation='error' \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
-    actor_rollout_ref.model.path=/root/.cache/huggingface/hub/models--allenai--OLMo-2-0425-1B/snapshots/a1847dff35000b4271fa70afc5db10fd29fedbdf \
+    actor_rollout_ref.model.path=/root/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B/snapshots/8faed761d45a263340a0528343f099c05c9a4323 \
     +actor_rollout_ref.actor.ntp_coeff=1.0 \
     actor_rollout_ref.actor.optim.lr=2e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -47,15 +47,15 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-aug24' \
-    trainer.experiment_name='30-200-olmo-15warmup-005penalty-log-nolenpenalty' \
+    trainer.experiment_name='80-400-qwen-15warmup-007penalty-log-nolenpenalty' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
     trainer.save_freq=200 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
-    +trainer.q_steps=30 \
-    +trainer.ref_update_freq=200 \
+    +trainer.q_steps=80 \
+    +trainer.ref_update_freq=400 \
     data.train_files=/mnt/task_runtime/opencoder_post.parquet \
     data.val_files=/root/data/real_code/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
