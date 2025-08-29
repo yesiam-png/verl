@@ -573,90 +573,119 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         Resets the actor model, optimizer, and scheduler with weights from a new Hugging Face model path.
         This method will completely replace the existing actor model and its associated optimizer.
         """
-        import torch
-        from verl.utils.logger import log_with_rank
-        from verl.workers.actor import DataParallelPPOActor
-        if not new_model_path:
-            new_model_path = self.config.model.path
-        
-        log_with_rank(
-            f"Starting to reset actor model with weights from: {new_model_path}", 
-            rank=self.rank, 
-            logger=logger, 
-            log_only_rank_0=True
-        )
-
-        # Clean up old resources to free memory before creating new ones.
-        # Python's garbage collector will handle this, but explicit deletion is clearer.
-        if hasattr(self, 'actor_module_fsdp'):
-            del self.actor_module_fsdp
-            del self.actor_optimizer
-            del self.actor_lr_scheduler
-            del self.actor
-            get_torch_device().empty_cache()
-
-        # Gather the necessary configurations to build the new model and optimizer
-        override_model_config = OmegaConf.to_container(self.config.model.get("override_config", OmegaConf.create()))
-        use_remove_padding = self.config.model.get("use_remove_padding", False)
-        use_fused_kernels = self.config.model.get("use_fused_kernels", False)
-        optim_config = self.config.actor.optim
-      #  optim_config.lr = optim_config.get("lr", 1e-5) * 10.0
-        optim_config.warmup_style = "multistep"
-        fsdp_config = self.config.actor.fsdp_config
-
-        # 1. Re-build the model, optimizer, and scheduler using the new path by calling the existing helper function
-        (
-            self.actor_module_fsdp,
-            self.actor_optimizer,
-            self.actor_lr_scheduler,
-            self.actor_model_config,
-        ) = self._build_model_optimizer(
-            model_path=new_model_path,
-            fsdp_config=fsdp_config,
-            optim_config=optim_config,
-            override_model_config=override_model_config,
-            use_remove_padding=use_remove_padding,
-            use_fused_kernels=use_fused_kernels,
-            enable_gradient_checkpointing=self.config.model.get("enable_gradient_checkpointing", False),
-            trust_remote_code=self.config.model.get("trust_remote_code", False),
-            use_liger=self.config.model.get("use_liger", False),
-            role="actor",
-            m_steps=m_steps,
-            enlarge_lr=True,
-            enable_activation_offload=self.config.model.get("enable_activation_offload", False),
-        )
-
-        # 2. Re-create the DataParallelPPOActor instance to link it with the new components
-        self.actor = DataParallelPPOActor(
-            config=self.config.actor, 
-            actor_module=self.actor_module_fsdp, 
-            actor_optimizer=self.actor_optimizer
-        )
-
-        # 3. Re-create the checkpoint manager with the new model and optimizer
-        self.checkpoint_manager = FSDPCheckpointManager(
-            model=self.actor_module_fsdp,
-            optimizer=self.actor.actor_optimizer,
-            lr_scheduler=self.actor_lr_scheduler,
-            processing_class=self.processor if self.processor is not None else self.tokenizer,
-            checkpoint_config=self.config.actor.checkpoint,
-        )
-        
-        # 4. Handle CPU offloading for the new model/optimizer if it's enabled in the config
-        if self._is_offload_param:
-            offload_fsdp_model_to_cpu(self.actor_module_fsdp)
-            log_gpu_memory_usage("After offloading newly reset actor model", logger=logger)
-
-        if self._is_offload_optimizer:
-            offload_fsdp_optimizer(optimizer=self.actor_optimizer)
-            log_gpu_memory_usage("After offloading newly reset actor optimizer", logger=logger)
+        try:
+            import torch
+            import gc
+            from verl.utils.logger import log_with_rank
+            from verl.workers.actor import DataParallelPPOActor
             
-        log_with_rank(
-            "Actor model has been successfully reset.", 
-            rank=self.rank, 
-            logger=logger, 
-            log_only_rank_0=True
-        )
+            if not new_model_path:
+                new_model_path = self.config.model.path
+            
+            log_with_rank(
+                f"Starting to reset actor model with weights from: {new_model_path}", 
+                rank=self.rank, 
+                logger=logger, 
+                log_only_rank_0=True
+            )
+
+            # Clean up old resources to free memory before creating new ones
+            if hasattr(self, 'actor_module_fsdp'):
+                del self.actor_module_fsdp
+            if hasattr(self, 'actor_optimizer'):
+                del self.actor_optimizer
+            if hasattr(self, 'actor_lr_scheduler'):
+                del self.actor_lr_scheduler
+            if hasattr(self, 'actor'):
+                del self.actor
+            
+            # Force garbage collection and clear GPU cache
+            gc.collect()
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif hasattr(torch, 'npu') and torch.npu.is_available():
+                torch.npu.empty_cache()
+
+            # Gather the necessary configurations to build the new model and optimizer
+            override_model_config = OmegaConf.to_container(self.config.model.get("override_config", OmegaConf.create()))
+            use_remove_padding = self.config.model.get("use_remove_padding", False)
+            use_fused_kernels = self.config.model.get("use_fused_kernels", False)
+            optim_config = self.config.actor.optim
+            
+            # Create a copy of optim_config to avoid modifying the original
+            optim_config_copy = OmegaConf.create(optim_config)
+            optim_config_copy.warmup_style = "multistep"
+            
+            fsdp_config = self.config.actor.fsdp_config
+
+            # 1. Re-build the model, optimizer, and scheduler using the new path
+            (
+                self.actor_module_fsdp,
+                self.actor_optimizer,
+                self.actor_lr_scheduler,
+                self.actor_model_config,
+            ) = self._build_model_optimizer(
+                model_path=new_model_path,
+                fsdp_config=fsdp_config,
+                optim_config=optim_config_copy,
+                override_model_config=override_model_config,
+                use_remove_padding=use_remove_padding,
+                use_fused_kernels=use_fused_kernels,
+                enable_gradient_checkpointing=self.config.model.get("enable_gradient_checkpointing", False),
+                trust_remote_code=self.config.model.get("trust_remote_code", False),
+                use_liger=self.config.model.get("use_liger", False),
+                role="actor",
+                m_steps=m_steps,
+                enlarge_lr=True,
+                enable_activation_offload=self.config.model.get("enable_activation_offload", False),
+            )
+
+            # 2. Re-create the DataParallelPPOActor instance
+            self.actor = DataParallelPPOActor(
+                config=self.config.actor, 
+                actor_module=self.actor_module_fsdp, 
+                actor_optimizer=self.actor_optimizer
+            )
+
+            # 3. Re-create the checkpoint manager
+            self.checkpoint_manager = FSDPCheckpointManager(
+                model=self.actor_module_fsdp,
+                optimizer=self.actor.actor_optimizer,
+                lr_scheduler=self.actor_lr_scheduler,
+                processing_class=self.processor if self.processor is not None else self.tokenizer,
+                checkpoint_config=self.config.actor.checkpoint,
+            )
+            
+            # 4. Handle CPU offloading if enabled
+            if self._is_offload_param:
+                offload_fsdp_model_to_cpu(self.actor_module_fsdp)
+                log_gpu_memory_usage("After offloading newly reset actor model", logger=logger)
+
+            if self._is_offload_optimizer:
+                offload_fsdp_optimizer(optimizer=self.actor_optimizer)
+                log_gpu_memory_usage("After offloading newly reset actor optimizer", logger=logger)
+                
+            log_with_rank(
+                "Actor model has been successfully reset.", 
+                rank=self.rank, 
+                logger=logger, 
+                log_only_rank_0=True
+            )
+            
+            # Ensure all processes are synchronized
+            if dist.is_initialized():
+                dist.barrier()
+                
+            return True  # Return success indicator
+            
+        except Exception as e:
+            log_with_rank(
+                f"Error resetting actor model: {str(e)}", 
+                rank=self.rank, 
+                logger=logger, 
+                log_only_rank_0=True
+            )
+            raise e
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def init_model(self, anchor_path=None):

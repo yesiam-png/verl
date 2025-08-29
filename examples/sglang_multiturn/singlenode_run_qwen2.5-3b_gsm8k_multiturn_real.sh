@@ -16,7 +16,7 @@ ray job submit \
         --config-path="$CONFIG_PATH" \
         --config-name='gsm8k_multiturn_grpo' \
         algorithm.adv_estimator=grpo \
-        data.train_batch_size=1000 \
+        data.train_batch_size=1024 \
         data.max_prompt_length=128 \
         data.filter_overlong_prompts=True \
         data.truncation='error' \
@@ -50,10 +50,10 @@ ray job submit \
         algorithm.use_kl_in_reward=False \
         trainer.critic_warmup=0 \
         trainer.logger='["console","wandb"]' \
-        trainer.project_name='em-aug24' \
-        trainer.experiment_name='40-400-qwen-40warmup-nopenalty-log-nolenpenalty-rerun' \
+        trainer.project_name='em-4nodes' \
+        trainer.experiment_name='40-400-qwen-40warmup-nopenalty-log-nolenpenalty-4node' \
         trainer.n_gpus_per_node=8 \
-        trainer.nnodes=5 \
+        trainer.nnodes=4 \
         trainer.val_before_train=False \
         trainer.save_freq=200 \
         trainer.test_freq=-1 \
