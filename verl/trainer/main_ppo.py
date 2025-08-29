@@ -221,7 +221,7 @@ class TaskRunner:
 #            config.data.train_files = glob.glob("/root/data/real_code/train_*.parquet")#[:30]
 #            config.data.train_files.append("/root/data/sync_code/train.parquet")
         if "opencoder" in config.data.train_files:
-            config.data.train_files = ["/mnt/task_runtime/opencoder_post.parquet", "/root/data/sync_code/train.parquet"]
+            config.data.train_files = ["s3://afm-common-permanent/shenao_zhang/opencoder_post.parquet", "s3://afm-common-permanent/shenao_zhang/sync_code_aug29/train.parquet"]
 
         train_dataset = create_rl_dataset(config.data.train_files, config.data, tokenizer, processor, is_train=True)
         val_dataset = create_rl_dataset(config.data.val_files, config.data, tokenizer, processor, is_train=False)
