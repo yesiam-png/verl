@@ -19,7 +19,7 @@ python3 -m verl.trainer.main_ppo \
     data.truncation='error' \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=48 \
-    actor_rollout_ref.model.path=/mnt/task_runtime/hub/models--Qwen--Qwen2.5-1.5B/snapshots/8faed761d45a263340a0528343f099c05c9a4323 \
+    actor_rollout_ref.model.path=/mnt/task_runtime/hub/models--meta-llama--Llama-3.2-1B/snapshots/4e20de362430cd3b72f300e6b0f18e50e7166e08 \
     +actor_rollout_ref.actor.ntp_coeff=1.0 \
     actor_rollout_ref.actor.optim.lr=2e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -48,7 +48,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-aug30' \
-    trainer.experiment_name='40-400-qwen-40warmup-nopenalty-log-nolenpenalty' \
+    trainer.experiment_name='40-400-llama-10warmup-nopenalty-log-005lenpenalty' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \

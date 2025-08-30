@@ -78,15 +78,15 @@ class Gsm8kInteraction(BaseInteraction):
      #   response = self._instance_dict[instance_id]["ground_truth"]
      #   assert "\n" not in content            
         if (content.lstrip(' ').startswith("\n") and content.endswith("\n")):                
-            reward = 1.0 - 0.01
-            if global_steps < 40:
+            reward = 1.0 #- 0.01
+            if global_steps < 10:
                 if content.strip().startswith("#"):# and len(content.split()) >= 8:
-                    reward = 1.0 - 0.01
+                    reward = 1.0 #- 0.01
                 else:
                     reward = 0.1
 
-           # if content.strip().startswith("#"):
-           #     reward -= 0.07
+            if content.strip().startswith("#"):
+                reward -= 0.05
             
          #   if content.strip().startswith("#") and len(content.split()) < 8:
          #       reward = 0.1
