@@ -56,7 +56,7 @@ python3 -m verl.trainer.main_ppo \
     +trainer.q_steps=0 \
     +trainer.ref_update_freq=200 \
     data.train_files=/mnt/task_runtime/opencoder_post.parquet \
-    data.val_files=/root/data/real_code/test.parquet \
+    data.val_files=s3://afm-common-permanent/shenao_zhang/sync_code_aug29/test.parquet \
     actor_rollout_ref.rollout.multi_turn.interaction_config_path="$PROJECT_DIR/examples/sglang_multiturn/config/interaction_config/gsm8k_interaction_config.yaml" \
     actor_rollout_ref.rollout.multi_turn.max_user_turns=1 \
     $@
