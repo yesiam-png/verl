@@ -48,11 +48,11 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-aug30' \
-    trainer.experiment_name='40-400-qwen-40warmup-nopenalty-log-nolenpenalty' \
+    trainer.experiment_name='40-400-qwen-10warmup-5penalty-log-005lenpenalty-2sync' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \
-    trainer.save_freq=200 \
+    trainer.save_freq=100 \
     trainer.test_freq=-1 \
     trainer.total_epochs=1 \
     +trainer.q_steps=40 \
