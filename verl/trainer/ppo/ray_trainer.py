@@ -989,7 +989,7 @@ class RayPPOTrainer:
         with open(local_latest_checkpointed_iteration, "w") as f:
             f.write(str(self.global_steps))
 
-        if "8B" in self.config.actor_rollout_ref.model.path and self.global_steps > self.config.trainer.ref_update_freq + self.config.trainer.save_freq:
+        if ("8B" in self.config.actor_rollout_ref.model.path or "9B" in self.config.actor_rollout_ref.model.path) and self.global_steps > self.config.trainer.ref_update_freq + self.config.trainer.save_freq:
             # --- NEW: upload the just-saved checkpoint dir to S3 and delete local copy ---
             # You can override this in your config: self.config.trainer.s3_base_uri
             s3_base_uri = getattr(
