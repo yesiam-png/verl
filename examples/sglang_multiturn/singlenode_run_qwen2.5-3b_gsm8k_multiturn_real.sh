@@ -18,7 +18,7 @@ python3 -m verl.trainer.main_ppo \
     data.truncation='error' \
     data.return_raw_chat=True \
     data.filter_overlong_prompts_workers=40 \
-    actor_rollout_ref.model.path=/mnt/task_runtime/hub/models--meta-llama--Llama-3.2-1B/snapshots/4e20de362430cd3b72f300e6b0f18e50e7166e08 \
+    actor_rollout_ref.model.path=/root/.cache/huggingface/hub/models--google--codegemma-7b/snapshots/2ec970089fe8f083d10d1ce6bac30538ac4badaa \
     +actor_rollout_ref.actor.ntp_coeff=1.0 \
     actor_rollout_ref.actor.optim.lr=2e-5 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -46,7 +46,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
     trainer.project_name='em-new' \
-    trainer.experiment_name='openandsyn-llama-ntponly-3sync' \
+    trainer.experiment_name='openandsyn-codegemma-ntponly-2sync' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=False \

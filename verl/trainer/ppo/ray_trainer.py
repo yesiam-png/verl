@@ -932,7 +932,7 @@ class RayPPOTrainer:
 
         # path: given_path + `/global_step_{global_steps}` + `/actor`
         local_global_step_folder = os.path.join(
-            self.config.trainer.default_local_dir, f"global_step_{self.global_steps+1}"
+            self.config.trainer.default_local_dir, f"global_step_{self.global_steps}"
         )
 
         print(f"local_global_step_folder: {local_global_step_folder}")
@@ -984,6 +984,40 @@ class RayPPOTrainer:
         )
         with open(local_latest_checkpointed_iteration, "w") as f:
             f.write(str(self.global_steps))
+
+        if ("7b" in self.config.actor_rollout_ref.model.path or "8B" in self.config.actor_rollout_ref.model.path or "9B" in self.config.actor_rollout_ref.model.path) and self.global_steps > self.config.trainer.ref_update_freq + self.config.trainer.save_freq:
+            # --- NEW: upload the just-saved checkpoint dir to S3 and delete local copy ---
+            # You can override this in your config: self.config.trainer.s3_base_uri
+            s3_base_uri = getattr(
+                self.config.trainer, "s3_base_uri", "s3://afm-common-permanent/shenao_zhang"
+            ).rstrip("/")
+
+            s3_dest = f"{s3_base_uri}/{self.config.trainer.experiment_name}/global_step_{self.global_steps - self.config.trainer.ref_update_freq - self.config.trainer.save_freq}"
+            print(f"Uploading checkpoint to S3: {s3_dest}")
+            old_local_global_step_folder = os.path.join(
+                self.config.trainer.default_local_dir, f"global_step_{self.global_steps - self.config.trainer.ref_update_freq - self.config.trainer.save_freq}"
+            )
+
+            try:
+                # Equivalent to: aws s3 cp <dir> s3://.../<dir> --recursive
+                result = subprocess.run(
+                    ["aws", "s3", "cp", old_local_global_step_folder.rstrip("/") + "/actor/huggingface", s3_dest, "--recursive"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    print("S3 upload failed; keeping local checkpoint.")
+                    if result.stderr:
+                        print(result.stderr)
+                else:
+                    print("S3 upload succeeded; deleting local checkpoint to free space.")
+                    shutil.rmtree(old_local_global_step_folder)  # remove only the per-step folder
+            except FileNotFoundError:
+                print("AWS CLI not found; skipping S3 upload and deletion.")
+            except Exception as e:
+                print(f"Unexpected error during S3 upload; keeping local checkpoint. Error: {e}")
+
 
     def _load_checkpoint(self):
         if self.config.trainer.resume_mode == "disable":
