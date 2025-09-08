@@ -60,6 +60,9 @@ from verl.utils.metric import (
 from verl.utils.seqlen_balancing import get_seqlen_balanced_partitions, log_seqlen_unbalance
 from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
+import os
+import shutil
+import subprocess
 
 WorkerType = type[Worker]
 
