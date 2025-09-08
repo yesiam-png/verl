@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC_BASE="/mnt/task_wrapper/user_output/artifacts/checkpoints/em-new/openandsyn-codegemma-ntponly-2sync-rerun"
-DST_BASE="s3://afm-common-permanent/shenao_zhang/openandsyn-codegemma-ntponly-2sync-rerun"
+SRC_BASE="/mnt/task_wrapper/user_output/artifacts/checkpoints/em-new-debug/openandsyn-codegemma-ntponly-1sync-rerun2"
+DST_BASE="s3://afm-common-permanent/shenao_zhang/openandsyn-codegemma-ntponly-1sync-rerun2"
 
-for step in $(seq 199 100 2400); do
+for step in $(seq 1999 200 2400); do
   src="${SRC_BASE}/global_step_${step}/actor/huggingface/"
   dst="${DST_BASE}/global_step_${step}"
   echo "Uploading ${src} -> ${dst}"
