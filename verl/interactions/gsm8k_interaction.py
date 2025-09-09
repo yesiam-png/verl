@@ -80,16 +80,16 @@ class Gsm8kInteraction(BaseInteraction):
         if (content.lstrip(' ').startswith("\n") and content.endswith("\n")):                
             reward = 1.0 #- 0.01
             if global_steps < 10:
-                if content.strip().startswith("#") and len(content.split()) >= 5:
+                if content.strip().startswith("#"): #and len(content.split()) >= 4:
                     reward = 1.0 #- 0.01
                 else:
                     reward = 0.1
 
             if content.strip().startswith("#"):
-                reward -= 0.05
+                reward -= 0.025
             
-            if content.strip().startswith("#") and len(content.split()) < 5:
-                reward = 0.1
+            #if content.strip().startswith("#") and len(content.split()) < 4:
+            #    reward = 0.1
 
         else:
             reward = 0.1

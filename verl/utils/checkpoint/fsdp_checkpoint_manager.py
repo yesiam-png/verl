@@ -157,10 +157,10 @@ class FSDPCheckpointManager(BaseCheckpointManager):
                 self.load_rng_state(extra_state_dict["rng"])
                 log_with_rank(f"Loaded rng from {remote_extra_state_path}", rank=self.rank, logger=logger)
 
-            lr_scheduler_state_dict = extra_state_dict["lr_scheduler"]
-            if lr_scheduler_state_dict is not None and self.lr_scheduler is not None:
-                self.lr_scheduler.load_state_dict(lr_scheduler_state_dict)
-                log_with_rank(f"Loaded lr_scheduler from {remote_extra_state_path}", rank=self.rank, logger=logger)
+           # lr_scheduler_state_dict = extra_state_dict["lr_scheduler"]
+           # if lr_scheduler_state_dict is not None and self.lr_scheduler is not None:
+           #     self.lr_scheduler.load_state_dict(lr_scheduler_state_dict)
+           #     log_with_rank(f"Loaded lr_scheduler from {remote_extra_state_path}", rank=self.rank, logger=logger)
 
         if self.rank == 0 and del_local_after_load:
             try:

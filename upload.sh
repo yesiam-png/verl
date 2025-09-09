@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC_BASE="/mnt/task_wrapper/user_output/artifacts/checkpoints/em-aug30/40-400-qwen-10warmup-5penalty-log-005lenpenalty-3sync"
-DST_BASE="s3://afm-common-permanent/shenao_zhang/40-400-qwen-10warmup-5penalty-log-005lenpenalty-3sync"
+SRC_BASE="/mnt/task_wrapper/user_output/artifacts/checkpoints/em-aug33/50-400-llama8b-10warmup-nopenalty-log-005lenpenalty-2sync-rerun"
+DST_BASE="s3://afm-common-permanent/shenao_zhang/50-400-llama8b-10warmup-nopenalty-log-005lenpenalty-2sync-rerun"
 
-for step in $(seq 100 100 2900); do
+for step in $(seq 1500 100 2100); do
   src="${SRC_BASE}/global_step_${step}/actor/huggingface/"
   dst="${DST_BASE}/global_step_${step}"
   echo "Uploading ${src} -> ${dst}"
